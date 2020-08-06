@@ -60,8 +60,6 @@ func acquireAuthTokenMSI(clientID string) (string, error) {
 		return "", fmt.Errorf("failed to read metadata endpoint response: %s", err)
 	}
 
-	fmt.Println(string(responseBytes))
-
 	var r responseJSON
 	err = json.Unmarshal(responseBytes, &r)
 	if err != nil {
@@ -147,8 +145,6 @@ func AcquireACRDockerCfg(clientID, acrFQDN string) (string, error) {
 	acrUsername := "00000000-0000-0000-0000-000000000000"
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken)))
 	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"tokenman@azurecr.io\",\"auth\":\"%s\"}}}", acrFQDN, acrUsername, accessToken, auth)
-
-	fmt.Println(dockercfg)
 
 	return dockercfg, nil
 }
