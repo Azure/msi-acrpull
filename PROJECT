@@ -1,0 +1,3 @@
+domain: aks.azure.com
+repo: github.com/Azure/msi-acrpull
+version: "2"
