@@ -14,7 +14,12 @@ func (t AccessToken) GetTokenTenantId() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return claims["tid"].(string), nil
+	tenantID, ok := claims["tid"].(string)
+	if !ok {
+		return "", fmt.Errorf("token has no tenant ID")
+	}
+
+	return tenantID, nil
 }
 
 func (t AccessToken) GetTokenClaims() (jwt.MapClaims, error) {

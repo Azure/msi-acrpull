@@ -17,7 +17,7 @@ const (
 	testTenantID = "1b4e67bf-39b2-4eb1-bec3-5099dd556b07"
 )
 
-var _ = Describe("Mutating Web Hook Controller", func() {
+var _ = Describe("Access Token Tests", func() {
 	var (
 		signingKey *rsa.PrivateKey
 	)
@@ -50,7 +50,7 @@ var _ = Describe("Mutating Web Hook Controller", func() {
 			expActual, err := token.GetTokenExp()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(expExpected).To(Equal(expActual))
+			Expect(expExpected).To(Equal(expActual.Unix()))
 		})
 	})
 })
