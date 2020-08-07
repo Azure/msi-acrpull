@@ -33,7 +33,14 @@ import (
 
 // AcrPullBindingSpec defines the desired state of AcrPullBinding
 type AcrPullBindingSpec struct {
-	AcrFQDN string `json:"acrFQDN,omitempty"`
+	// +kubebuilder:validation:MinLength=0
+
+	// The full server name for the ACR. For example, test.azurecr.io
+	AcrServer string `json:"acrServer,omitempty"`
+
+	// +kubebuilder:validation:MinLength=0
+
+	// The Managed Identity client ID that is used to authenticate with ACR
 	MsiClientID string `json: "msiClientID"`
 }
 
@@ -41,9 +48,14 @@ type AcrPullBindingSpec struct {
 type AcrPullBindingStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Information when was the last time the ACR token was refreshed.
+	// +optional
+	LastTokenRefreshTime *metav1.Time `json:"lastTokenRefreshTime,omitempty"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // AcrPullBinding is the Schema for the acrpullbindings API
 type AcrPullBinding struct {
