@@ -111,23 +111,23 @@ func acquireArmToken(clientID string) (AccessToken, error) {
 
 	resp, err = client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send metadata msiMetadataEndpoint request: %w", err)
+		return "", fmt.Errorf("failed to send metadata endpoint request: %w", err)
 	}
 
 	if resp.StatusCode != 200 {
 		responseBytes, _ := ioutil.ReadAll(resp.Body)
-		return "", fmt.Errorf("Metadata msiMetadataEndpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
+		return "", fmt.Errorf("Metadata endpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
 	}
 
 	responseBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read metadata msiMetadataEndpoint response: %w", err)
+		return "", fmt.Errorf("failed to read metadata endpoint response: %w", err)
 	}
 
 	var tokenResp tokenResponse
 	err = json.Unmarshal(responseBytes, &tokenResp)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal metadata msiMetadataEndpoint response: %w", err)
+		return "", fmt.Errorf("failed to unmarshal metadata endpoint response: %w", err)
 	}
 
 	return AccessToken(tokenResp.AccessToken), nil
