@@ -61,7 +61,7 @@ func AcquireACRAccessToken(clientID string, acrFQDN string) (AccessToken, error)
 
 	if resp.StatusCode != 200 {
 		responseBytes, _ := ioutil.ReadAll(resp.Body)
-		return "", fmt.Errorf("ACR token exchange msiMetadataEndpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
+		return "", fmt.Errorf("ACR token exchange endpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
 	}
 
 	responseBytes, err := ioutil.ReadAll(resp.Body)
