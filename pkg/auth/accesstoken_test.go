@@ -1,4 +1,4 @@
-package token
+package auth
 
 import (
 	"crypto/rand"
@@ -108,7 +108,6 @@ func getTestAcrToken(exp int64, signingKey *rsa.PrivateKey) (AccessToken, error)
 		"sub": testSubID,
 		"version": 1.0,
 		"tenant": testTenantID,
-		"tid": testTenantID,
 		"permissions": map[string]interface{} {
 			"actions": []string{"read"},
 		},

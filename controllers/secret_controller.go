@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/Azure/msi-acrpull/auth"
-
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/Azure/msi-acrpull/pkg/auth"
 )
 
 const (
@@ -62,13 +62,13 @@ func (r *SecretReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	log.Info("Found specified client ID and ACR", "client_id", clientID, "acr", acr)
 
-	acrAccessToken, err := token.AcquireACRAccessToken(clientID, acr)
+	acrAccessToken, err := auth.AcquireACRAccessToken(clientID, acr)
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
 		return ctrl.Result{}, err
 	}
 
-	dockerConfig, err := token.CreateACRDockerCfg(acr, acrAccessToken)
+	dockerConfig, err := auth.CreateACRDockerCfg(acr, acrAccessToken)
 	if err != nil {
 		log.Error(err, "Failed to acquire acr docker config")
 		return ctrl.Result{}, err
@@ -94,13 +94,13 @@ func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func getTokenRefreshDuration(accessToken token.AccessToken) time.Duration {
+func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
 	exp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return defaultTokenRefreshDuration
 	}
 
-	refreshDuration := time.Now().UTC().Sub(exp.Add(-tokenRefreshBuffer))
+	refreshDuration := exp.Sub(time.Now().Add(tokenRefreshBuffer))
 	if refreshDuration < 0 {
 		return 0
 	}

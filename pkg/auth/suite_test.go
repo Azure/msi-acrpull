@@ -1,4 +1,4 @@
-package token
+package auth
 
 import (
 "testing"
@@ -9,5 +9,5 @@ import (
 
 func TestEndpoints(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Token Test Suite")
+	RunSpecs(t, "Auth Test Suite")
 }
