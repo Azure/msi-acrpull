@@ -3,11 +3,11 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"github.com/dgrijalva/jwt-go"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/dgrijalva/jwt-go"
 )
 
 

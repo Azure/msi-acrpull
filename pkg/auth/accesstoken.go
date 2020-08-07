@@ -3,8 +3,10 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
+	"net/http"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 type AccessToken string

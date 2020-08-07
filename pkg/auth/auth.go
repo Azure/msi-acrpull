@@ -14,6 +14,7 @@ import (
 const (
 	armResource           = "https://management.azure.com/"
 	msiMetadataEndpoint   = "http://169.254.169.254/metadata/identity/oauth2/token"
+	acrUsername           = "00000000-0000-0000-0000-000000000000"
 )
 
 type tokenResponse struct {
@@ -50,12 +51,14 @@ func AcquireACRAccessToken(clientID string, acrFQDN string) (AccessToken, error)
 	req.Header.Add("Content-Length", strconv.Itoa(len(parameters.Encode())))
 
 	client := &http.Client{}
-	resp, err := client.Do(req)
+	var resp *http.Response
+	defer closeResponse(resp)
+
+	resp, err = client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send token exchange request: %w", err)
 	}
 
-	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		responseBytes, _ := ioutil.ReadAll(resp.Body)
 		return "", fmt.Errorf("ACR token exchange msiMetadataEndpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
@@ -76,7 +79,6 @@ func AcquireACRAccessToken(clientID string, acrFQDN string) (AccessToken, error)
 }
 
 func CreateACRDockerCfg(acrFQDN string, accessToken AccessToken) (string, error) {
-	acrUsername := "00000000-0000-0000-0000-000000000000"
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken)))
 	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"tokenman@azurecr.io\",\"auth\":\"%s\"}}}",
 		acrFQDN, acrUsername, accessToken, auth)
@@ -104,12 +106,13 @@ func acquireArmToken(clientID string) (AccessToken, error) {
 	req.Header.Add("Metadata", "true")
 
 	client := &http.Client{}
-	resp, err := client.Do(req)
+	var resp *http.Response
+	defer closeResponse(resp)
+
+	resp, err = client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send metadata msiMetadataEndpoint request: %w", err)
 	}
-
-	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		responseBytes, _ := ioutil.ReadAll(resp.Body)
@@ -128,4 +131,11 @@ func acquireArmToken(clientID string) (AccessToken, error) {
 	}
 
 	return AccessToken(tokenResp.AccessToken), nil
+}
+
+func closeResponse(resp *http.Response) {
+	if resp == nil {
+		return
+	}
+	resp.Body.Close()
 }

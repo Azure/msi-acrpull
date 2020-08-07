@@ -19,7 +19,6 @@ const (
 	acrAnnotation      = "msi-acrpull/acr"
 
 	tokenRefreshBuffer          = time.Minute * 30
-	defaultTokenRefreshDuration = time.Hour
 )
 
 // SecretReconciler reconciles a Secret object
@@ -97,7 +96,7 @@ func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
 	exp, err := accessToken.GetTokenExp()
 	if err != nil {
-		return defaultTokenRefreshDuration
+		return 0
 	}
 
 	refreshDuration := exp.Sub(time.Now().Add(tokenRefreshBuffer))
