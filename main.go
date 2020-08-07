@@ -60,15 +60,6 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	//if err = (&controllers.SecretReconciler{
-	//	Client: mgr.GetClient(),
-	//	Log:    ctrl.Log.WithName("controllers").WithName("secret"),
-	//	Scheme: mgr.GetScheme(),
-	//}).SetupWithManager(mgr); err != nil {
-	//	setupLog.Error(err, "unable to create controller", "controller", "secret")
-	//	os.Exit(1)
-	//}
-
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")

@@ -20,6 +20,8 @@ import (
 const (
 	ownerKey = ".metadata.controller"
 	dockerConfigKey = ".dockerconfigjson"
+
+	tokenRefreshBuffer          = time.Minute * 30
 )
 
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
@@ -158,7 +160,7 @@ func newPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
 func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
 	exp, err := accessToken.GetTokenExp()
 	if err != nil {
-		return defaultTokenRefreshDuration
+		return 0
 	}
 
 	refreshDuration := exp.Sub(time.Now().Add(tokenRefreshBuffer))
