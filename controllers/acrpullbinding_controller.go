@@ -54,7 +54,9 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	if len(pullSecrets.Items) > 1 {
 		err := errors.New("more than 1 secret registered to thsi CRD")
-		return ctrl.Result{}, err
+		return ctrl.Result{
+			Requeue: false,
+		}, err
 	}
 
 	msiClientID := acrBinding.Spec.MsiClientID
@@ -105,19 +107,16 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := mgr.GetFieldIndexer().IndexField(&v1.Secret{}, ownerKey, func(rawObj runtime.Object) []string {
-		// grab the job object, extract the owner...
 		secret := rawObj.(*v1.Secret)
 		owner := metav1.GetControllerOf(secret)
 		if owner == nil {
 			return nil
 		}
 
-		// ...make sure it's a CronJob...
 		if owner.APIVersion != msiacrpullv1beta1.GroupVersion.String() || owner.Kind != "AcrPullBinding" {
 			return nil
 		}
 
-		// ...and if so, return it
 		return []string{owner.Name}
 	}); err != nil {
 		return err
