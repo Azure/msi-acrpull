@@ -92,17 +92,3 @@ func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&v1.Secret{}).
 		Complete(r)
 }
-
-func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
-	exp, err := accessToken.GetTokenExp()
-	if err != nil {
-		return 0
-	}
-
-	refreshDuration := exp.Sub(time.Now().Add(tokenRefreshBuffer))
-	if refreshDuration < 0 {
-		return 0
-	}
-
-	return refreshDuration
-}

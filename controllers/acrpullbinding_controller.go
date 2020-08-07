@@ -1,46 +1,25 @@
-/*
-   MIT License
-
-   Copyright (c) Microsoft Corporation.
-
-   Permission is hereby granted, free of charge, to any person obtaining a copy
-   of this software and associated documentation files (the "Software"), to deal
-   in the Software without restriction, including without limitation the rights
-   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-   copies of the Software, and to permit persons to whom the Software is
-   furnished to do so, subject to the following conditions:
-
-   The above copyright notice and this permission notice shall be included in all
-   copies or substantial portions of the Software.
-
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-   SOFTWARE
-*/
-
 package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"time"
+
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
+	"github.com/Azure/msi-acrpull/pkg/auth"
 )
 
-var (
-	jobOwnerKey = ".metadata.controller"
+const (
+	ownerKey = ".metadata.controller"
+	dockerConfigKey = ".dockerconfigjson"
 )
 
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
@@ -58,15 +37,15 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	ctx := context.Background()
 	log := r.Log.WithValues("acrpullbinding", req.NamespacedName)
 
-	var acrPullBinding msiacrpullv1beta1.AcrPullBinding
-	if err := r.Get(ctx, req.NamespacedName, &acrPullBinding); err != nil {
+	var acrBinding msiacrpullv1beta1.AcrPullBinding
+	if err := r.Get(ctx, req.NamespacedName, &acrBinding); err != nil {
 		log.Error(err, "unable to fetch acrPullBinding.")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	var pullSecrets v1.SecretList
-	if err := r.List(ctx, &pullSecrets, client.InNamespace(req.Namespace), client.MatchingFields{jobOwnerKey: req.Name}); err != nil {
+	if err := r.List(ctx, &pullSecrets, client.InNamespace(req.Namespace), client.MatchingFields{ownerKey: req.Name}); err != nil {
 		log.Error(err, "unable to list child Jobs")
 		return ctrl.Result{}, err
 	}
@@ -76,48 +55,54 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
+	msiClientID := acrBinding.Spec.MsiClientID
+	acrServer := acrBinding.Spec.AcrServer
+
+	acrAccessToken, err := auth.AcquireACRAccessToken(msiClientID, acrServer)
+	if err != nil {
+		log.Error(err, "Failed to get ACR access token")
+		return ctrl.Result{}, err
+	}
+
+	dockerConfig, err := auth.CreateACRDockerCfg(acrServer, acrAccessToken)
+	if err != nil {
+		log.Error(err, "Failed to acquire acr docker config")
+		return ctrl.Result{}, err
+	}
+
+	// Create a new secret if one doesn't already exist
 	if len(pullSecrets.Items) == 0 {
-		pullSecret := &v1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: make(map[string]string),
-				Annotations: map[string]string{
-					"sam.io": "new",
-				},
-				Name:      fmt.Sprintf("%s-msi-acrpull-secret", acrPullBinding.Name),
-				Namespace: acrPullBinding.Namespace,
-			},
-		}
-
-		if err := ctrl.SetControllerReference(&acrPullBinding, pullSecret, r.Scheme); err != nil {
-			log.Error(err, "failed to create Acr ImagePullSecret")
-			return ctrl.Result{}, err
-		}
-
-		if err := r.Create(ctx, pullSecret); err != nil {
+		pullSecret, err := newPullSecret(&acrBinding, dockerConfig, r.Scheme)
+		if err != nil {
 			log.Error(err, "Failed to create pull secret")
 			return ctrl.Result{}, err
 		}
 
+		if err := r.Create(ctx, pullSecret); err != nil {
+			log.Error(err, "Failed to create pull secret in cluster")
+			return ctrl.Result{}, err
+		}
+
 		return ctrl.Result{
-			RequeueAfter: time.Minute * 10,
+			Requeue:      true,
+			RequeueAfter: getTokenRefreshDuration(acrAccessToken),
 		}, nil
 	}
 
-	pullSecret := &pullSecrets.Items[0]
-	pullSecret.Annotations["sam.io"] = time.Now().String()
-
+	pullSecret := updatePullSecret(&pullSecrets.Items[0], dockerConfig)
 	if err := r.Update(ctx, pullSecret); err != nil {
 		log.Error(err, "Failed to update pull secret")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{
-		RequeueAfter: time.Minute * 10,
+		Requeue:      true,
+		RequeueAfter: getTokenRefreshDuration(acrAccessToken),
 	}, nil
 }
 
 func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(&v1.Secret{}, jobOwnerKey, func(rawObj runtime.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(&v1.Secret{}, ownerKey, func(rawObj runtime.Object) []string {
 		// grab the job object, extract the owner...
 		secret := rawObj.(*v1.Secret)
 		owner := metav1.GetControllerOf(secret)
@@ -141,3 +126,46 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&v1.Secret{}).
 		Complete(r)
 }
+
+func updatePullSecret(pullSecret *v1.Secret, dockerConfig string) (*v1.Secret){
+	pullSecret.Data[dockerConfigKey] = []byte(dockerConfig)
+	return pullSecret
+}
+
+func newPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
+	dockerConfig string, scheme *runtime.Scheme) (*v1.Secret, error){
+
+	pullSecret := &v1.Secret{
+		Type: v1.SecretTypeDockerConfigJson,
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{},
+			Annotations: map[string]string{},
+			Name:      fmt.Sprintf("%s-msi-acrpull-secret", acrBinding.Name),
+			Namespace: acrBinding.Namespace,
+		},
+		Data: map[string][]byte {
+			dockerConfigKey: []byte(dockerConfig),
+		},
+	}
+
+	if err := ctrl.SetControllerReference(acrBinding, pullSecret, scheme); err != nil {
+		return nil, errors.Wrap(err, "failed to create Acr ImagePullSecret")
+	}
+
+	return pullSecret, nil
+}
+
+func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
+	exp, err := accessToken.GetTokenExp()
+	if err != nil {
+		return defaultTokenRefreshDuration
+	}
+
+	refreshDuration := exp.Sub(time.Now().Add(tokenRefreshBuffer))
+	if refreshDuration < 0 {
+		return 0
+	}
+
+	return refreshDuration
+}
+

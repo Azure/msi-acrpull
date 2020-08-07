@@ -12,7 +12,7 @@ import (
 	"github.com/Azure/msi-acrpull/pkg/auth"
 )
 
-var _ = Describe("Secret Controller Tests", func() {
+var _ = Describe("AcrPullBinding Controller Tests", func() {
 	Context("getTokenRefreshDuration", func() {
 		It("Should return 0 for negative durations", func() {
 			token, err := getTestToken(time.Now().Add(-time.Hour).Unix())
