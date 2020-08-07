@@ -41,7 +41,7 @@ type AcrPullBindingSpec struct {
 	// +kubebuilder:validation:MinLength=0
 
 	// The Managed Identity client ID that is used to authenticate with ACR
-	MsiClientID string `json: "msiClientID"`
+	MsiClientID string `json:"msiClientId"`
 }
 
 // AcrPullBindingStatus defines the observed state of AcrPullBinding

@@ -1,0 +1,70 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.2.4
+  creationTimestamp: null
+  name: acrpullbindings.msi-acrpull.microsoft.com
+spec:
+  group: msi-acrpull.microsoft.com
+  names:
+    kind: AcrPullBinding
+    listKind: AcrPullBindingList
+    plural: acrpullbindings
+    singular: acrpullbinding
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: AcrPullBinding is the Schema for the acrpullbindings API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: AcrPullBindingSpec defines the desired state of AcrPullBinding
+          properties:
+            acrServer:
+              description: The full server name for the ACR. For example, test.azurecr.io
+              minLength: 0
+              type: string
+            msiClientId:
+              description: The Managed Identity client ID that is used to authenticate
+                with ACR
+              minLength: 0
+              type: string
+          required:
+          - msiClientId
+          type: object
+        status:
+          description: AcrPullBindingStatus defines the observed state of AcrPullBinding
+          properties:
+            lastTokenRefreshTime:
+              description: Information when was the last time the ACR token was refreshed.
+              format: date-time
+              type: string
+          type: object
+      type: object
+  version: v1beta1
+  versions:
+  - name: v1beta1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
