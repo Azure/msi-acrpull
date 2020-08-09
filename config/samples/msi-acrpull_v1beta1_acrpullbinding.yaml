@@ -1,7 +1,8 @@
 apiVersion: msi-acrpull.microsoft.com/v1beta1
 kind: AcrPullBinding
 metadata:
-  name: acrpullbinding-sample
+  name: test
 spec:
-  # Add fields here
-  foo: bar
+  managedIdentityClientID: "test-client-id"
+  acrServer: "test.azurecr.io"
+

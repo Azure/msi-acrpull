@@ -21,7 +21,7 @@ const (
 	ownerKey = ".metadata.controller"
 	dockerConfigKey = ".dockerconfigjson"
 
-	tokenRefreshBuffer          = time.Minute * 30
+	tokenRefreshBuffer = time.Minute * 30
 )
 
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
@@ -48,12 +48,12 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	var pullSecrets v1.SecretList
 	if err := r.List(ctx, &pullSecrets, client.InNamespace(req.Namespace), client.MatchingFields{ownerKey: req.Name}); err != nil {
-		log.Error(err, "unable to list child Jobs")
+		log.Error(err, "unable to list child secrets")
 		return ctrl.Result{}, err
 	}
 
 	if len(pullSecrets.Items) > 1 {
-		err := errors.New("more than 1 secret registered to thsi CRD")
+		err := errors.New("more than 1 secret registered to this CRD")
 		return ctrl.Result{
 			Requeue: false,
 		}, err
