@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	armResource           = "https://management.azure.com/"
-	msiMetadataEndpoint   = "http://169.254.169.254/metadata/identity/oauth2/token"
-	acrUsername           = "00000000-0000-0000-0000-000000000000"
+	armResource         = "https://management.azure.com/"
+	msiMetadataEndpoint = "http://169.254.169.254/metadata/identity/oauth2/token"
+	acrUsername         = "00000000-0000-0000-0000-000000000000"
 )
 
 type tokenResponse struct {
@@ -78,12 +78,12 @@ func AcquireACRAccessToken(clientID string, acrFQDN string) (AccessToken, error)
 	return AccessToken(tokenResp.RefreshToken), nil
 }
 
-func CreateACRDockerCfg(acrFQDN string, accessToken AccessToken) (string, error) {
+func CreateACRDockerCfg(acrFQDN string, accessToken AccessToken) string {
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken)))
 	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"tokenman@azurecr.io\",\"auth\":\"%s\"}}}",
 		acrFQDN, acrUsername, accessToken, auth)
 
-	return dockercfg, nil
+	return dockercfg
 }
 
 func acquireArmToken(clientID string) (AccessToken, error) {

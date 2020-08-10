@@ -40,19 +40,27 @@ spec:
               description: The full server name for the ACR. For example, test.azurecr.io
               minLength: 0
               type: string
-            msiClientId:
+            managedIdentityClientID:
               description: The Managed Identity client ID that is used to authenticate
                 with ACR
               minLength: 0
               type: string
           required:
-          - msiClientId
+          - acrServer
+          - managedIdentityClientID
           type: object
         status:
           description: AcrPullBindingStatus defines the observed state of AcrPullBinding
           properties:
+            error:
+              description: Error message if there was an error updating the token.
+              type: string
             lastTokenRefreshTime:
               description: Information when was the last time the ACR token was refreshed.
+              format: date-time
+              type: string
+            tokenExpirationTime:
+              description: The expiration date of the current ACR token.
               format: date-time
               type: string
           type: object

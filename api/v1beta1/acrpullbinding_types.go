@@ -52,6 +52,14 @@ type AcrPullBindingStatus struct {
 	// Information when was the last time the ACR token was refreshed.
 	// +optional
 	LastTokenRefreshTime *metav1.Time `json:"lastTokenRefreshTime,omitempty"`
+
+	// The expiration date of the current ACR token.
+	// +optional
+	TokenExpirationTime *metav1.Time `json:"tokenExpirationTime,omitempty"`
+
+	// Error message if there was an error updating the token.
+	// +optional
+	Error string `json:"error,omitempty"`
 }
 
 // +kubebuilder:object:root=true

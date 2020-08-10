@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	ownerKey = ".metadata.controller"
+	ownerKey        = ".metadata.controller"
 	dockerConfigKey = ".dockerconfigjson"
 
 	tokenRefreshBuffer = time.Minute * 30
@@ -59,26 +59,26 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}, err
 	}
 
-	msiClientID := acrBinding.Spec.MsiClientID
+	msiClientID := acrBinding.Spec.ManagedIdentityClientID
 	acrServer := acrBinding.Spec.AcrServer
 
 	acrAccessToken, err := auth.AcquireACRAccessToken(msiClientID, acrServer)
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
+		if err := r.setErrStatus(ctx, err, acrBinding); err != nil {
+			log.Error(err, "Failed to update error status")
+		}
+
 		return ctrl.Result{}, err
 	}
 
-	dockerConfig, err := auth.CreateACRDockerCfg(acrServer, acrAccessToken)
-	if err != nil {
-		log.Error(err, "Failed to acquire acr docker config")
-		return ctrl.Result{}, err
-	}
+	dockerConfig := auth.CreateACRDockerCfg(acrServer, acrAccessToken)
 
 	// Create a new secret if one doesn't already exist
 	if len(pullSecrets.Items) == 0 {
 		pullSecret, err := newPullSecret(&acrBinding, dockerConfig, r.Scheme)
 		if err != nil {
-			log.Error(err, "Failed to create pull secret")
+			log.Error(err, "Failed to construct pull secret")
 			return ctrl.Result{}, err
 		}
 
@@ -86,16 +86,16 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			log.Error(err, "Failed to create pull secret in cluster")
 			return ctrl.Result{}, err
 		}
-
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: getTokenRefreshDuration(acrAccessToken),
-		}, nil
+	} else {
+		pullSecret := updatePullSecret(&pullSecrets.Items[0], dockerConfig)
+		if err := r.Update(ctx, pullSecret); err != nil {
+			log.Error(err, "Failed to update pull secret")
+			return ctrl.Result{}, err
+		}
 	}
 
-	pullSecret := updatePullSecret(&pullSecrets.Items[0], dockerConfig)
-	if err := r.Update(ctx, pullSecret); err != nil {
-		log.Error(err, "Failed to update pull secret")
+	if err := r.setSuccessStatus(ctx, acrBinding, acrAccessToken); err != nil {
+		log.Error(err, "Failed to update acr binding status")
 		return ctrl.Result{}, err
 	}
 
@@ -128,23 +128,47 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func updatePullSecret(pullSecret *v1.Secret, dockerConfig string) (*v1.Secret){
+func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding msiacrpullv1beta1.AcrPullBinding, accessToken auth.AccessToken) error {
+	tokenExp, err := accessToken.GetTokenExp()
+	if err != nil {
+		return err
+	}
+	acrBinding.Status.TokenExpirationTime = &metav1.Time{Time: tokenExp}
+	acrBinding.Status.LastTokenRefreshTime = &metav1.Time{Time: time.Now().UTC()}
+
+	if err := r.Status().Update(ctx, &acrBinding); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *AcrPullBindingReconciler) setErrStatus(ctx context.Context, err error, acrBinding msiacrpullv1beta1.AcrPullBinding) error {
+	acrBinding.Status.Error = err.Error()
+	if err := r.Status().Update(ctx, &acrBinding); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func updatePullSecret(pullSecret *v1.Secret, dockerConfig string) *v1.Secret {
 	pullSecret.Data[dockerConfigKey] = []byte(dockerConfig)
 	return pullSecret
 }
 
 func newPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
-	dockerConfig string, scheme *runtime.Scheme) (*v1.Secret, error){
+	dockerConfig string, scheme *runtime.Scheme) (*v1.Secret, error) {
 
 	pullSecret := &v1.Secret{
 		Type: v1.SecretTypeDockerConfigJson,
 		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{},
+			Labels:      map[string]string{},
 			Annotations: map[string]string{},
-			Name:      fmt.Sprintf("%s-msi-acrpull-secret", acrBinding.Name),
-			Namespace: acrBinding.Namespace,
+			Name:        fmt.Sprintf("%s-msi-acrpull-secret", acrBinding.Name),
+			Namespace:   acrBinding.Namespace,
 		},
-		Data: map[string][]byte {
+		Data: map[string][]byte{
 			dockerConfigKey: []byte(dockerConfig),
 		},
 	}
@@ -169,4 +193,3 @@ func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
 
 	return refreshDuration
 }
-

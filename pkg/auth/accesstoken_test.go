@@ -5,9 +5,9 @@ import (
 	"crypto/rsa"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/dgrijalva/jwt-go"
 )
 
 const (
