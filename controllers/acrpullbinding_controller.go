@@ -97,7 +97,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		log.Error(err, "Failed to update acr binding status")
 		return ctrl.Result{}, err
 	}
-	
+
 	return ctrl.Result{
 		RequeueAfter: getTokenRefreshDuration(acrAccessToken),
 	}, nil
