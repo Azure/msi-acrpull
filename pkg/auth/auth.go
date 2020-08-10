@@ -80,7 +80,7 @@ func AcquireACRAccessToken(clientID string, acrFQDN string) (AccessToken, error)
 
 func CreateACRDockerCfg(acrFQDN string, accessToken AccessToken) string {
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken)))
-	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"tokenman@azurecr.io\",\"auth\":\"%s\"}}}",
+	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"msi-acrpull@azurecr.io\",\"auth\":\"%s\"}}}",
 		acrFQDN, acrUsername, accessToken, auth)
 
 	return dockercfg
