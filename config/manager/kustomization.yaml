@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: pskreter/msi-acrpull
-  newTag: beta-0.0.2
+  newTag: beta-0.0.11
