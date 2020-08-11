@@ -15,7 +15,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	go test ./... -coverprofile=cover.out -covermode=atomic
 
 # Build manager binary
 manager: generate fmt vet
