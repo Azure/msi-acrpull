@@ -1,0 +1,23 @@
+trigger:
+- main
+
+pr: none
+
+pool: "AKS-Prod-Pool"
+
+variables:
+- group: aks-prod-registry
+
+steps:
+- bash: scripts/ci-mcr.sh
+  displayName: "build image"
+  env:
+    REGISTRY: $(REGISTRY)
+    REGISTRY_USERNAME: $(REGISTRY_USERNAME)
+    REGISTRY_PASSWORD: $(REGISTRY_PASSWORD)
+    MCR_REGISTRY: $(MCR_ONBOARDING_ACR_REGISTRY)
+    MCR_ORG: $(MCR_ONBOARDING_ACR_PATH_PREFIX)
+    MCR_USERNAME: $(AKS_ACR_REGISTRY_USERNAME)
+    MCR_PASSWORD: $(AKS_ACR_REGISTRY_PASSWORD)
+    APP: msi-acrpull
+    BUILD_NUMBER: $(Build.BuildNumber)
