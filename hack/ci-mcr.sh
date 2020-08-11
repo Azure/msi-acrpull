@@ -13,8 +13,7 @@ docker login ${MCR_REGISTRY} -u ${MCR_USERNAME} -p ${MCR_PASSWORD}
 TAG=${BUILD_NUMBER}
 echo "image tag will be ${TAG}"
 
-IMG="${REGISTRY}/${APP}:${TAG}"
-make docker-build
+IMG="${REGISTRY}/${APP}:${TAG}" make docker-build
 docker tag "${REGISTRY}/${APP}:${TAG}" "${MCR_REGISTRY}${MCR_ORG}/${APP}:${TAG}"
 docker push "${REGISTRY}/${APP}:${TAG}"
 docker push "${MCR_REGISTRY}${MCR_ORG}/${APP}:${TAG}"
