@@ -132,8 +132,11 @@ func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBind
 	if err != nil {
 		return err
 	}
-	acrBinding.Status.TokenExpirationTime = &metav1.Time{Time: tokenExp}
-	acrBinding.Status.LastTokenRefreshTime = &metav1.Time{Time: time.Now().UTC()}
+
+	acrBinding.Status = msiacrpullv1beta1.AcrPullBindingStatus{
+		TokenExpirationTime: &metav1.Time{Time: tokenExp},
+		LastTokenRefreshTime: &metav1.Time{Time: time.Now().UTC()},
+	}
 
 	if err := r.Status().Update(ctx, acrBinding); err != nil {
 		return err
