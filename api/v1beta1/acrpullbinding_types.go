@@ -38,12 +38,12 @@ type AcrPullBindingSpec struct {
 	// The full server name for the ACR. For example, test.azurecr.io
 	AcrServer string `json:"acrServer"`
 
-	// +kubebuilder:validation:MinLength=0
-
 	// The Managed Identity client ID that is used to authenticate with ACR (specify one of ClientID or ResourceID)
+	// +optional
 	ManagedIdentityClientID string `json:"managedIdentityClientID"`
 
 	// The Managed Identity resource ID that is used to authenticate with ACR (if ClientID is specified, this is ignored)
+	// +optional
 	ManagedIdentityResourceID string `json:"managedIdentityResourceID"`
 }
 
