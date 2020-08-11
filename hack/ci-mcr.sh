@@ -10,7 +10,7 @@ docker login ${REGISTRY} -u ${REGISTRY_USERNAME} -p ${REGISTRY_PASSWORD}
 echo "docker login to ${MCR_REGISTRY}"
 docker login ${MCR_REGISTRY} -u ${MCR_USERNAME} -p ${MCR_PASSWORD}
 
-TAG=$(Build.BuildNumber)
+TAG=${BUILD_NUMBER}
 echo "image tag will be ${TAG}"
 
 docker build . -t "${REGISTRY}/${APP}:${TAG}"

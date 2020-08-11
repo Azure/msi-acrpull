@@ -18,3 +18,4 @@ steps:
     MCR_USERNAME: $(AKS_ACR_REGISTRY_USERNAME)
     MCR_PASSWORD: $(AKS_ACR_REGISTRY_PASSWORD)
     APP: msi-acrpull
+    BUILD_NUMBER: $(Build.BuildNumber)
