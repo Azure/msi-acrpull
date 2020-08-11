@@ -9,5 +9,5 @@ import (
 
 func TestEndpoints(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Secret Controller Test Suite")
+	RunSpecs(t, "Controller Test Suite")
 }
