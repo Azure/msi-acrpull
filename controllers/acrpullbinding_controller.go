@@ -48,9 +48,18 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	msiClientID := acrBinding.Spec.ManagedIdentityClientID
+	msiResourceID := acrBinding.Spec.ManagedIdentityResourceID
 	acrServer := acrBinding.Spec.AcrServer
 
-	acrAccessToken, err := auth.AcquireACRAccessToken(msiClientID, acrServer)
+	var acrAccessToken auth.AccessToken
+	var err error
+
+	if msiClientID != "" {
+		acrAccessToken, err = auth.AcquireACRAccessTokenWithClientID(msiClientID, acrServer)
+	} else {
+		acrAccessToken, err = auth.AcquireACRAccessTokenWithResourceID(msiResourceID, acrServer)
+	}
+
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
 		if err := r.setErrStatus(ctx, err, &acrBinding); err != nil {
@@ -134,7 +143,7 @@ func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBind
 	}
 
 	acrBinding.Status = msiacrpullv1beta1.AcrPullBindingStatus{
-		TokenExpirationTime: &metav1.Time{Time: tokenExp},
+		TokenExpirationTime:  &metav1.Time{Time: tokenExp},
 		LastTokenRefreshTime: &metav1.Time{Time: time.Now().UTC()},
 	}
 
