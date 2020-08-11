@@ -42,7 +42,7 @@ spec:
               type: string
             managedIdentityClientID:
               description: The Managed Identity client ID that is used to authenticate
-                with ACR (specify one off ClientID or ResourceID)
+                with ACR (specify one of ClientID or ResourceID)
               minLength: 0
               type: string
             managedIdentityResourceID:

@@ -40,7 +40,7 @@ type AcrPullBindingSpec struct {
 
 	// +kubebuilder:validation:MinLength=0
 
-	// The Managed Identity client ID that is used to authenticate with ACR (specify one off ClientID or ResourceID)
+	// The Managed Identity client ID that is used to authenticate with ACR (specify one of ClientID or ResourceID)
 	ManagedIdentityClientID string `json:"managedIdentityClientID"`
 
 	// The Managed Identity resource ID that is used to authenticate with ACR (if ClientID is specified, this is ignored)
