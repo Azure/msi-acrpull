@@ -35,6 +35,7 @@ type AcrPullBindingReconciler struct {
 // +kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=*
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;update;patch
 
 func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
@@ -134,7 +135,7 @@ func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBind
 	}
 
 	acrBinding.Status = msiacrpullv1beta1.AcrPullBindingStatus{
-		TokenExpirationTime: &metav1.Time{Time: tokenExp},
+		TokenExpirationTime:  &metav1.Time{Time: tokenExp},
 		LastTokenRefreshTime: &metav1.Time{Time: time.Now().UTC()},
 	}
 

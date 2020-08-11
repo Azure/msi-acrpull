@@ -13,6 +13,14 @@ rules:
   verbs:
   - '*'
 - apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - msi-acrpull.microsoft.com
   resources:
   - acrpullbindings
