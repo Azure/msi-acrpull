@@ -1,19 +1,20 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
 trigger:
 - main
 
-pool:
-  vmImage: 'ubuntu-latest'
+pool: "AKS-Prod-Pool"
+
+variables:
+- group: aks-prod-registry
 
 steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
-
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+- bash: hack/ci-mcr.sh
+  displayName: "build image"
+  env:
+    REGISTRY: $(REGISTRY)
+    REGISTRY_USERNAME: $(REGISTRY_USERNAME)
+    REGISTRY_PASSWORD: $(REGISTRY_PASSWORD)
+    MCR_REGISTRY: $(MCR_ONBOARDING_ACR_REGISTRY)
+    MCR_ORG: $(MCR_ONBOARDING_ACR_PATH_PREFIX)
+    MCR_USERNAME: $(AKS_ACR_REGISTRY_USERNAME)
+    MCR_PASSWORD: $(AKS_ACR_REGISTRY_PASSWORD)
+    APP: msi-acrpull
