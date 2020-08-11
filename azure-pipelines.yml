@@ -9,7 +9,7 @@ variables:
 - group: aks-prod-registry
 
 steps:
-- bash: hack/ci-mcr.sh
+- bash: scripts/ci-mcr.sh
   displayName: "build image"
   env:
     REGISTRY: $(REGISTRY)
