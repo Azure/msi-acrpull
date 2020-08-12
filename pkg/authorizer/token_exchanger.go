@@ -13,7 +13,9 @@ import (
 )
 
 // TokenExchanger is an instance of ACRTokenExchanger
-type TokenExchanger struct{}
+type TokenExchanger struct {
+	acrServerScheme string
+}
 
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
 func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
@@ -22,10 +24,19 @@ func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acr
 		return "", fmt.Errorf("failed to get tenant id from ARM token: %w", err)
 	}
 
-	exchangeURL := fmt.Sprintf("https://%s/oauth2/exchange", acrFQDN)
+	scheme := te.acrServerScheme
+	if scheme == "" {
+		scheme = "https"
+	}
+
+	exchangeURL := fmt.Sprintf("%s://%s/oauth2/exchange", scheme, acrFQDN)
+	ul, err := url.Parse(exchangeURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse token exchange url: %w", err)
+	}
 	parameters := url.Values{}
 	parameters.Add("grant_type", "access_token")
-	parameters.Add("service", acrFQDN)
+	parameters.Add("service", ul.Hostname())
 	parameters.Add("tenant", tenantID)
 	parameters.Add("access_token", string(armToken))
 
