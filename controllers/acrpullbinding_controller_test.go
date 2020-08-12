@@ -111,6 +111,107 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			Expect(acrBinding.Finalizers).To(BeEmpty())
 		})
 	})
+
+	Context("updateServiceAccount", func() {
+		It("Should update service account with image pull secret reference", func() {
+			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "default",
+					Finalizers: []string{
+						"msi-acrpull.microsoft.com",
+					},
+				},
+			}
+			serviceAccount := &v1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "default",
+					Namespace: "default",
+				},
+			}
+			reconciler := &AcrPullBindingReconciler{
+				Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding, serviceAccount),
+				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
+				Scheme: scheme.Scheme,
+			}
+			log := reconciler.Log.WithValues("acrpullbinding", "default")
+			ctx := context.Background()
+			req := ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: "default",
+				},
+			}
+			err := reconciler.updateServiceAccount(ctx, acrBinding, req, log)
+			Expect(err).To(BeNil())
+
+			saNamespacedName := types.NamespacedName{
+				Name:      "default",
+				Namespace: "default",
+			}
+			err = reconciler.Client.Get(ctx, saNamespacedName, serviceAccount)
+			Expect(err).To(BeNil())
+			Expect(serviceAccount.ImagePullSecrets).To(HaveLen(1))
+		})
+	})
+
+	Context("appendImagePullSecretRef", func() {
+		It("Should append image pull secret reference to service account", func() {
+			serviceAccount := &v1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "default",
+					Namespace: "default",
+				},
+			}
+			appendImagePullSecretRef(serviceAccount, "test")
+			Expect(serviceAccount.ImagePullSecrets).To(HaveLen(1))
+		})
+	})
+
+	Context("imagePullSecretRefExist", func() {
+		It("Should check if image pull secret reference exists given name", func() {
+			imagePullSecretRef := []v1.LocalObjectReference{
+				{
+					Name: "test-msi-acrpull-secret",
+				},
+			}
+			exist := imagePullSecretRefExist(imagePullSecretRef, "test-msi-acrpull-secret")
+			Expect(exist).To(BeTrue())
+
+			exist = imagePullSecretRefExist(imagePullSecretRef, "not-exist")
+			Expect(exist).To(BeFalse())
+		})
+	})
+
+	Context("removeImagePullSecretRef", func() {
+		It("Should remove image pull secret reference", func() {
+			imagePullSecretRef := []v1.LocalObjectReference{
+				{
+					Name: "test-msi-acrpull-secret",
+				},
+			}
+			newImagePullSecretRef := removeImagePullSecretRef(imagePullSecretRef, "test-msi-acrpull-secret")
+			Expect(newImagePullSecretRef).To(BeEmpty())
+		})
+	})
+
+	Context("containsString", func() {
+		It("Should check if an array of strings contains a string", func() {
+			strings := []string{"test-string"}
+			contains := containsString(strings, "test-string")
+			Expect(contains).To(BeTrue())
+
+			contains = containsString(strings, "not-exist")
+			Expect(contains).To(BeFalse())
+		})
+	})
+
+	Context("removeString", func() {
+		It("Should remove string from an array", func() {
+			strings := []string{"test-string"}
+			newStrings := removeString(strings, "test-string")
+			Expect(newStrings).To(BeEmpty())
+		})
+	})
 })
 
 func getTestToken(exp int64) (auth.AccessToken, error) {

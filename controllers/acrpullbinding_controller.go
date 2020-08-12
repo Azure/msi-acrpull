@@ -316,12 +316,6 @@ func getPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding, pullSecrets []v
 		return nil
 	}
 
-	secretNames := ""
-	for _, secret := range pullSecrets {
-		secretNames += secret.Name + " "
-	}
-	log.Info(fmt.Sprintf("pullSecrets: %v", secretNames))
-	log.Info(fmt.Sprintf("acr binding: %s", acrBinding.Name))
 	pullSecretName := getPullSecretName(acrBinding.Name)
 
 	for idx, secret := range pullSecrets {
