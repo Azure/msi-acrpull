@@ -16,11 +16,18 @@ const (
 )
 
 // TokenRetriever is an instance of ManagedIdentityTokenRetriever
-type TokenRetriever struct{}
+type TokenRetriever struct {
+	metadataEndpoint string
+}
 
 // AcquireARMToken acquires the managed identity ARM access token
 func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
-	msiEndpoint, err := url.Parse(msiMetadataEndpoint)
+	endpoint := tr.metadataEndpoint
+	if endpoint == "" {
+		endpoint = msiMetadataEndpoint
+	}
+
+	msiEndpoint, err := url.Parse(endpoint)
 	if err != nil {
 		return "", err
 	}

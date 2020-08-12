@@ -16,6 +16,7 @@ import (
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
+	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 const (
@@ -51,7 +52,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	msiResourceID := acrBinding.Spec.ManagedIdentityResourceID
 	acrServer := acrBinding.Spec.AcrServer
 
-	var acrAccessToken authorizer.AccessToken
+	var acrAccessToken types.AccessToken
 	var err error
 
 	az := authorizer.NewAuthorizer()
@@ -137,7 +138,7 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken authorizer.AccessToken) error {
+func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken types.AccessToken) error {
 	tokenExp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return err
@@ -212,7 +213,7 @@ func newBasePullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
 	return pullSecret, nil
 }
 
-func getTokenRefreshDuration(accessToken authorizer.AccessToken) time.Duration {
+func getTokenRefreshDuration(accessToken types.AccessToken) time.Duration {
 	exp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return 0
