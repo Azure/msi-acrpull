@@ -55,47 +55,18 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if acrBinding.ObjectMeta.DeletionTimestamp.IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
-			log.Info(fmt.Sprintf("Adding acr pull binding finalizer: %v", acrBinding.ObjectMeta.Finalizers))
-			acrBinding.ObjectMeta.Finalizers = append(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
-			if err := r.Update(ctx, &acrBinding); err != nil {
-				log.Error(err, fmt.Sprintf("Failed to append acr pull binding finalizer %s", msiAcrPullFinalizerName))
-				return ctrl.Result{}, err
-			}
+		// the object is not being deleted, so if it does not have our finalizer,
+		// then need to add the finalizer and update the object.
+		if err := r.addFinalizer(ctx, &acrBinding, log); err != nil {
+			return ctrl.Result{}, err
 		}
 	} else {
-		// The object is being deleted
-		if containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
-			// our finalizer is present, so need to clean up ImagePullSecret reference
-			var serviceAccount v1.ServiceAccount
-			saNamespacedName := types.NamespacedName{
-				Namespace: req.Namespace,
-				Name:      "default",
-			}
-			if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
-				log.Error(err, "Failed to get default service account")
-				return ctrl.Result{}, err
-			}
-			pullSecretName := getPullSecretName(acrBinding.Name)
-			serviceAccount.ImagePullSecrets = removeImagePullSecretRef(serviceAccount.ImagePullSecrets, pullSecretName)
-			if err := r.Update(ctx, &serviceAccount); err != nil {
-				log.Error(err, fmt.Sprintf("Failed to remove image pull secret reference %s from default service account", pullSecretName))
-				return ctrl.Result{}, err
-			}
-
-			// remove our finalizer from the list and update it.
-			acrBinding.ObjectMeta.Finalizers = removeString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
-			log.Info(fmt.Sprintf("Removing acr pull binding finalizer: %v", acrBinding.ObjectMeta.Finalizers))
-			if err := r.Update(ctx, &acrBinding); err != nil {
-				log.Error(err, fmt.Sprintf("Failed to remove acr pull binding finalizer %s", msiAcrPullFinalizerName))
-				return ctrl.Result{}, err
-			}
+		// the object is being deleted
+		if err := r.removeFinalizer(ctx, &acrBinding, req, log); err != nil {
+			return ctrl.Result{}, err
 		}
 
-		// Stop reconciliation as the item is being deleted
+		// stop reconciliation as the item is being deleted
 		return ctrl.Result{}, nil
 	}
 
@@ -145,38 +116,8 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 	}
 
-	var serviceAccount v1.ServiceAccount
-	saNamespacedName := types.NamespacedName{
-		Namespace: req.Namespace,
-		Name:      "default",
-	}
-	if lock, ok := serviceAccountLocks[saNamespacedName]; ok {
-		lock.Lock()
-		defer lock.Unlock()
-	} else {
-		newLock := &sync.Mutex{}
-		newLock.Lock()
-		defer newLock.Unlock()
-		serviceAccountLocks[saNamespacedName] = newLock
-	}
-	if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
-		log.Error(err, "Failed to get default service account")
+	if err := r.updateServiceAccount(ctx, &acrBinding, req, log); err != nil {
 		return ctrl.Result{}, err
-	}
-	if pullSecret != nil && !imagePullSecretRefExist(serviceAccount.ImagePullSecrets, pullSecret.Name) {
-		log.Info("Updating default service account")
-
-		secretNames := ""
-		for _, secret := range serviceAccount.ImagePullSecrets {
-			secretNames += secret.Name + " "
-		}
-		log.Info(fmt.Sprintf("Service account current pullSecrets: %v", secretNames))
-
-		appendImagePullSecretRef(&serviceAccount, pullSecret.Name)
-		if err := r.Update(ctx, &serviceAccount); err != nil {
-			log.Error(err, fmt.Sprintf("Failed to append image pull secret reference %s to default service account", pullSecret.Name))
-			return ctrl.Result{}, err
-		}
 	}
 
 	if err := r.setSuccessStatus(ctx, &acrBinding, acrAccessToken); err != nil {
@@ -211,6 +152,77 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithEventFilter(predicate.GenerationChangedPredicate{}). // Needed to not enter reconcile loop on status update
 		Owns(&v1.Secret{}).
 		Complete(r)
+}
+
+func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, log logr.Logger) error {
+	if !containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
+		acrBinding.ObjectMeta.Finalizers = append(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
+		if err := r.Update(ctx, acrBinding); err != nil {
+			log.Error(err, "Failed to append acr pull binding finalizer", "finalizerName", msiAcrPullFinalizerName)
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, req ctrl.Request, log logr.Logger) error {
+	if containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
+		// our finalizer is present, so need to clean up ImagePullSecret reference
+		var serviceAccount v1.ServiceAccount
+		saNamespacedName := types.NamespacedName{
+			Namespace: req.Namespace,
+			Name:      "default",
+		}
+		if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
+			log.Error(err, "Failed to get default service account")
+			return err
+		}
+		pullSecretName := getPullSecretName(acrBinding.Name)
+		serviceAccount.ImagePullSecrets = removeImagePullSecretRef(serviceAccount.ImagePullSecrets, pullSecretName)
+		if err := r.Update(ctx, &serviceAccount); err != nil {
+			log.Error(err, "Failed to remove image pull secret reference from default service account", "pullSecretName", pullSecretName)
+			return err
+		}
+
+		// remove our finalizer from the list and update it.
+		acrBinding.ObjectMeta.Finalizers = removeString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
+		if err := r.Update(ctx, acrBinding); err != nil {
+			log.Error(err, "Failed to remove acr pull binding finalizer", "finalizerName", msiAcrPullFinalizerName)
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, req ctrl.Request, log logr.Logger) error {
+	var serviceAccount v1.ServiceAccount
+	saNamespacedName := types.NamespacedName{
+		Namespace: req.Namespace,
+		Name:      "default",
+	}
+	if lock, ok := serviceAccountLocks[saNamespacedName]; ok {
+		lock.Lock()
+		defer lock.Unlock()
+	} else {
+		newLock := &sync.Mutex{}
+		newLock.Lock()
+		defer newLock.Unlock()
+		serviceAccountLocks[saNamespacedName] = newLock
+	}
+	if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
+		log.Error(err, "Failed to get default service account")
+		return err
+	}
+	pullSecretName := getPullSecretName(acrBinding.Name)
+	if !imagePullSecretRefExist(serviceAccount.ImagePullSecrets, pullSecretName) {
+		log.Info("Updating default service account")
+		appendImagePullSecretRef(&serviceAccount, pullSecretName)
+		if err := r.Update(ctx, &serviceAccount); err != nil {
+			log.Error(err, "Failed to append image pull secret reference to default service account", "pullSecretName", pullSecretName)
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken auth.AccessToken) error {
