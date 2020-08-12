@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"time"
@@ -9,7 +10,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 
+	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	"github.com/Azure/msi-acrpull/pkg/auth"
 )
 
@@ -43,6 +47,25 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			}
 			appendImagePullSecretRef(serviceAccount, "secret2")
 			Expect(len(serviceAccount.ImagePullSecrets)).To(Equal(2))
+		})
+	})
+
+	Context("addFinalizer", func() {
+		FIt("Should add finalizer to acr pull binding", func() {
+			reconciler := &AcrPullBindingReconciler{
+				Client: k8sManager.GetClient(),
+				Log:    ctrl.Log.WithName("controllers").WithName("SecretScope"),
+				Scheme: k8sManager.GetScheme(),
+			}
+			log := reconciler.Log.WithValues("acrpullbinding", "system")
+			ctx := context.Background()
+			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers: []string{},
+				},
+			}
+			reconciler.addFinalizer(ctx, acrBinding, log)
+			Expect(acrBinding.Finalizers).To(HaveLen(1))
 		})
 	})
 })
