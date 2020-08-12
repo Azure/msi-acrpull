@@ -98,7 +98,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		log.Error(err, "unable to list child secrets")
 		return ctrl.Result{}, err
 	}
-	pullSecret := getPullSecret(&acrBinding, pullSecrets.Items, log)
+	pullSecret := getPullSecret(&acrBinding, pullSecrets.Items)
 
 	// Create a new secret if one doesn't already exist
 	if pullSecret == nil {
@@ -320,7 +320,7 @@ func getPullSecretName(acrBindingName string) string {
 	return fmt.Sprintf("%s-msi-acrpull-secret", acrBindingName)
 }
 
-func getPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding, pullSecrets []v1.Secret, log logr.Logger) *v1.Secret {
+func getPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding, pullSecrets []v1.Secret) *v1.Secret {
 	if pullSecrets == nil {
 		return nil
 	}
