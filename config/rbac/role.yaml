@@ -18,8 +18,10 @@ rules:
   - serviceaccounts
   verbs:
   - get
+  - list
   - patch
   - update
+  - watch
 - apiGroups:
   - msi-acrpull.microsoft.com
   resources:

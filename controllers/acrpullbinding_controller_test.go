@@ -8,6 +8,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/Azure/msi-acrpull/pkg/auth"
 )
@@ -30,6 +31,18 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 
 			refreshDuration := getTokenRefreshDuration(token)
 			Expect(refreshDuration > 0).To(BeTrue())
+		})
+	})
+
+	Context("appendImagePullSecretRef", func() {
+		It("Should append image pull secret reference to slice", func() {
+			serviceAccount := &v1.ServiceAccount{
+				ImagePullSecrets: []v1.LocalObjectReference{
+					{Name: "secret1"},
+				},
+			}
+			appendImagePullSecretRef(serviceAccount, "secret2")
+			Expect(len(serviceAccount.ImagePullSecrets)).To(Equal(2))
 		})
 	})
 })
