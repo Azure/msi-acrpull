@@ -8,13 +8,15 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 // TokenExchanger is an instance of ACRTokenExchanger
 type TokenExchanger struct{}
 
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
-func (te *TokenExchanger) ExchangeACRAccessToken(armToken AccessToken, acrFQDN string) (AccessToken, error) {
+func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
 	tenantID, err := armToken.GetTokenTenantId()
 	if err != nil {
 		return "", fmt.Errorf("failed to get tenant id from ARM token: %w", err)
@@ -60,5 +62,5 @@ func (te *TokenExchanger) ExchangeACRAccessToken(armToken AccessToken, acrFQDN s
 		return "", fmt.Errorf("failed to read token exchange response: %w. response: %s", err, string(responseBytes))
 	}
 
-	return AccessToken(tokenResp.RefreshToken), nil
+	return types.AccessToken(tokenResp.RefreshToken), nil
 }

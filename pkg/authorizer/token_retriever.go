@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+
+	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 type TokenRetriever struct{}
 
 // AcquireARMToken acquires the managed identity ARM access token
-func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (AccessToken, error) {
+func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
 	msiEndpoint, err := url.Parse(msiMetadataEndpoint)
 	if err != nil {
 		return "", err
@@ -66,7 +68,7 @@ func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (A
 		return "", fmt.Errorf("failed to unmarshal metadata endpoint response: %w", err)
 	}
 
-	return AccessToken(tokenResp.AccessToken), nil
+	return types.AccessToken(tokenResp.AccessToken), nil
 }
 
 func closeResponse(resp *http.Response) {

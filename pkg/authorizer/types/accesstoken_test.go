@@ -1,4 +1,4 @@
-package authorizer
+package types
 
 import (
 	"crypto/rand"
@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	testSubID    = "83c44b7b-2b02-4be8-8c70-c37e1cfb4ede"
 	testTenantID = "1b4e67bf-39b2-4eb1-bec3-5099dd556b07"
 )
 
@@ -79,7 +78,7 @@ func getTestArmToken(exp int64, signingKey *rsa.PrivateKey) (AccessToken, error)
 		"exp":        exp,
 		"grant_type": "refresh_token",
 		"iat":        time.Now().AddDate(0, 0, -2).Unix(),
-		"sub":        testSubID,
+		"sub":        "sub",
 		"ver":        1.0,
 		"tid":        testTenantID,
 		"xms_mirid":  "fake/msi/resource/id",
@@ -103,7 +102,7 @@ func getTestAcrToken(exp int64, signingKey *rsa.PrivateKey) (AccessToken, error)
 		"exp":        exp,
 		"grant_type": "refresh_token",
 		"iat":        time.Now().AddDate(0, 0, -2).Unix(),
-		"sub":        testSubID,
+		"sub":        "sub",
 		"version":    1.0,
 		"tenant":     testTenantID,
 		"permissions": map[string]interface{}{

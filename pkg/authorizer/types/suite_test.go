@@ -1,4 +1,4 @@
-package authorizer
+package types
 
 import (
 	"testing"
@@ -9,5 +9,5 @@ import (
 
 func TestAuthorizer(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Authorizer Test Suite")
+	RunSpecs(t, "Authorizer Types Test Suite")
 }
