@@ -24,12 +24,36 @@ type tokenResponse struct {
 	TokenType    string `json:"token_type"`
 }
 
-func AcquireACRAccessToken(clientID string, acrFQDN string) (AccessToken, error) {
-	armToken, err := acquireArmToken(clientID)
+// AcquireACRAccessTokenWithResourceID acquires ACR access token using managed identity resource ID (/subscriptions/{id}/resourceGroups/{group}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}).
+func AcquireACRAccessTokenWithResourceID(identityResourceID string, acrFQDN string) (AccessToken, error) {
+	armToken, err := acquireArmToken("", identityResourceID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get ARM access token: %w", err)
 	}
 
+	return exchangeACRAccessToken(armToken, acrFQDN)
+}
+
+// AcquireACRAccessTokenWithClientID acquires ACR access token using managed identity client ID.
+func AcquireACRAccessTokenWithClientID(clientID string, acrFQDN string) (AccessToken, error) {
+	armToken, err := acquireArmToken(clientID, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to get ARM access token: %w", err)
+	}
+
+	return exchangeACRAccessToken(armToken, acrFQDN)
+}
+
+// CreateACRDockerCfg creates an ACR docker config using given access token.
+func CreateACRDockerCfg(acrFQDN string, accessToken AccessToken) string {
+	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken)))
+	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"msi-acrpull@azurecr.io\",\"auth\":\"%s\"}}}",
+		acrFQDN, acrUsername, accessToken, auth)
+
+	return dockercfg
+}
+
+func exchangeACRAccessToken(armToken AccessToken, acrFQDN string) (AccessToken, error) {
 	tenantID, err := armToken.GetTokenTenantId()
 	if err != nil {
 		return "", fmt.Errorf("failed to get tenant id from ARM token: %w", err)
@@ -78,23 +102,20 @@ func AcquireACRAccessToken(clientID string, acrFQDN string) (AccessToken, error)
 	return AccessToken(tokenResp.RefreshToken), nil
 }
 
-func CreateACRDockerCfg(acrFQDN string, accessToken AccessToken) string {
-	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken)))
-	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"msi-acrpull@azurecr.io\",\"auth\":\"%s\"}}}",
-		acrFQDN, acrUsername, accessToken, auth)
-
-	return dockercfg
-}
-
-func acquireArmToken(clientID string) (AccessToken, error) {
+func acquireArmToken(clientID string, resourceID string) (AccessToken, error) {
 	msiEndpoint, err := url.Parse(msiMetadataEndpoint)
 	if err != nil {
 		return "", err
 	}
 
 	parameters := url.Values{}
+	if clientID != "" {
+		parameters.Add("client_id", clientID)
+	} else {
+		parameters.Add("mi_res_id", resourceID)
+	}
+
 	parameters.Add("resource", armResource)
-	parameters.Add("client_id", clientID)
 	parameters.Add("api-version", "2018-02-01")
 
 	msiEndpoint.RawQuery = parameters.Encode()
