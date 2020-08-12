@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -28,8 +27,6 @@ const (
 
 	tokenRefreshBuffer = time.Minute * 30
 )
-
-var serviceAccountLocks = make(map[k8stypes.NamespacedName]*sync.Mutex)
 
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
 type AcrPullBindingReconciler struct {
@@ -211,15 +208,6 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 	saNamespacedName := k8stypes.NamespacedName{
 		Namespace: req.Namespace,
 		Name:      "default",
-	}
-	if lock, ok := serviceAccountLocks[saNamespacedName]; ok {
-		lock.Lock()
-		defer lock.Unlock()
-	} else {
-		newLock := &sync.Mutex{}
-		newLock.Lock()
-		defer newLock.Unlock()
-		serviceAccountLocks[saNamespacedName] = newLock
 	}
 	if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
 		log.Error(err, "Failed to get default service account")
