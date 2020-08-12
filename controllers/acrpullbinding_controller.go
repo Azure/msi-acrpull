@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
-	"github.com/Azure/msi-acrpull/pkg/auth"
+	"github.com/Azure/msi-acrpull/pkg/authorizer"
 )
 
 const (
@@ -51,13 +51,15 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	msiResourceID := acrBinding.Spec.ManagedIdentityResourceID
 	acrServer := acrBinding.Spec.AcrServer
 
-	var acrAccessToken auth.AccessToken
+	var acrAccessToken authorizer.AccessToken
 	var err error
 
+	az := authorizer.NewAuthorizer()
+
 	if msiClientID != "" {
-		acrAccessToken, err = auth.AcquireACRAccessTokenWithClientID(msiClientID, acrServer)
+		acrAccessToken, err = az.AcquireACRAccessTokenWithClientID(msiClientID, acrServer)
 	} else {
-		acrAccessToken, err = auth.AcquireACRAccessTokenWithResourceID(msiResourceID, acrServer)
+		acrAccessToken, err = az.AcquireACRAccessTokenWithResourceID(msiResourceID, acrServer)
 	}
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
@@ -68,7 +70,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
-	dockerConfig := auth.CreateACRDockerCfg(acrServer, acrAccessToken)
+	dockerConfig := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
 
 	var pullSecrets v1.SecretList
 	if err := r.List(ctx, &pullSecrets, client.InNamespace(req.Namespace), client.MatchingFields{ownerKey: req.Name}); err != nil {
@@ -135,7 +137,7 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken auth.AccessToken) error {
+func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken authorizer.AccessToken) error {
 	tokenExp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return err
@@ -210,7 +212,7 @@ func newBasePullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
 	return pullSecret, nil
 }
 
-func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
+func getTokenRefreshDuration(accessToken authorizer.AccessToken) time.Duration {
 	exp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return 0

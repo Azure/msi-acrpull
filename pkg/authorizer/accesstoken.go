@@ -1,4 +1,4 @@
-package auth
+package authorizer
 
 import (
 	"encoding/json"
@@ -7,6 +7,13 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 )
+
+type tokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	Resource     string `json:"resource"`
+	TokenType    string `json:"token_type"`
+}
 
 type AccessToken string
 
