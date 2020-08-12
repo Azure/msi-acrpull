@@ -1,0 +1,89 @@
+<mxfile host="d208e65c-a585-4be2-abab-82c4e046d5e9" modified="2020-08-11T07:03:19.314Z" agent="5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Code/1.47.0 Chrome/78.0.3904.130 Electron/7.3.2 Safari/537.36" etag="Nsv1IY6NyenTEylkNBay" version="13.1.3">
+    <diagram id="NTRxBioxAWoiE-Bp2DD2" name="Page-1">
+        <mxGraphModel dx="1533" dy="1124" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-2" value="ACRPullBinding" style="html=1;whiteSpace=wrap;comic=1;strokeWidth=2;fontFamily=Comic Sans MS;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="360" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-3" value="ACRPullBindingController" style="html=1;whiteSpace=wrap;comic=1;strokeWidth=2;fontFamily=Comic Sans MS;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="510" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-6" value="ImagePullSecret" style="rhombus;html=1;align=center;whiteSpace=wrap;comic=1;strokeWidth=2;fontFamily=Comic Sans MS;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="135" y="680" width="130" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-8" value="User" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="330" y="160" width="30" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-9" value="4. Reconciles" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-3" target="Heuv_v8DvjNTG0tcAHmc-6" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="400" y="570" as="sourcePoint"/>
+                        <mxPoint x="450" y="520" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-11" value="2. Watches Changes" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-3" target="Heuv_v8DvjNTG0tcAHmc-2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="400" y="700" as="sourcePoint"/>
+                        <mxPoint x="450" y="650" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-12" value="" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-8" target="Heuv_v8DvjNTG0tcAHmc-2" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="240" y="100" as="sourcePoint"/>
+                        <mxPoint x="270" y="240" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-13" value="1. Creates" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=13;" parent="Heuv_v8DvjNTG0tcAHmc-12" vertex="1" connectable="0">
+                    <mxGeometry x="0.0482" y="-4" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-14" value="Pods" style="html=1;whiteSpace=wrap;comic=1;strokeWidth=2;fontFamily=Comic Sans MS;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="425" y="360" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-15" value="" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-8" target="Heuv_v8DvjNTG0tcAHmc-14" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="380" y="207.0270270270271" as="sourcePoint"/>
+                        <mxPoint x="236.42857142857156" y="370" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-16" value="1. Creates" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=13;" parent="Heuv_v8DvjNTG0tcAHmc-15" vertex="1" connectable="0">
+                    <mxGeometry x="0.0482" y="-4" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-17" value="Service Account" style="rhombus;html=1;align=center;whiteSpace=wrap;comic=1;strokeWidth=2;fontFamily=Comic Sans MS;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="415" y="685" width="150" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-18" value="5. Attaches" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-6" target="Heuv_v8DvjNTG0tcAHmc-17" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="460" y="610" as="sourcePoint"/>
+                        <mxPoint x="450" y="520" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-21" value="Azure Container Registry" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://cdn2.iconfinder.com/data/icons/essential-web-2/50/storage-drawer-stack-container-office-128.png;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="670" y="420" width="80" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-22" value="6. ImagePullCredential" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-17" target="Heuv_v8DvjNTG0tcAHmc-14" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="400" y="570" as="sourcePoint"/>
+                        <mxPoint x="450" y="520" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-23" value="7. Pull Images" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-21" target="Heuv_v8DvjNTG0tcAHmc-14" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="400" y="570" as="sourcePoint"/>
+                        <mxPoint x="450" y="520" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="Heuv_v8DvjNTG0tcAHmc-24" value="3. Exchange Managed Identity Token with ACR token" style="rounded=0;comic=1;strokeWidth=2;endArrow=blockThin;html=1;fontFamily=Comic Sans MS;fontStyle=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="Heuv_v8DvjNTG0tcAHmc-3" target="Heuv_v8DvjNTG0tcAHmc-21" edge="1">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry">
+                        <mxPoint x="400" y="570" as="sourcePoint"/>
+                        <mxPoint x="710" y="540" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
