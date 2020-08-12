@@ -48,7 +48,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	var acrBinding msiacrpullv1beta1.AcrPullBinding
 	if err := r.Get(ctx, req.NamespacedName, &acrBinding); err != nil {
-		log.Info("unable to fetch acrPullBinding.")
+		log.Error(err, "unable to fetch acrPullBinding.")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
