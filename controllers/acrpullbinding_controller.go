@@ -11,13 +11,14 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
-	"github.com/Azure/msi-acrpull/pkg/auth"
+	"github.com/Azure/msi-acrpull/pkg/authorizer"
+	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 const (
@@ -28,7 +29,7 @@ const (
 	tokenRefreshBuffer = time.Minute * 30
 )
 
-var serviceAccountLocks = make(map[types.NamespacedName]*sync.Mutex)
+var serviceAccountLocks = make(map[k8stypes.NamespacedName]*sync.Mutex)
 
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
 type AcrPullBindingReconciler struct {
@@ -74,13 +75,15 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	msiResourceID := acrBinding.Spec.ManagedIdentityResourceID
 	acrServer := acrBinding.Spec.AcrServer
 
-	var acrAccessToken auth.AccessToken
+	var acrAccessToken types.AccessToken
 	var err error
 
+	az := authorizer.NewAuthorizer()
+
 	if msiClientID != "" {
-		acrAccessToken, err = auth.AcquireACRAccessTokenWithClientID(msiClientID, acrServer)
+		acrAccessToken, err = az.AcquireACRAccessTokenWithClientID(msiClientID, acrServer)
 	} else {
-		acrAccessToken, err = auth.AcquireACRAccessTokenWithResourceID(msiResourceID, acrServer)
+		acrAccessToken, err = az.AcquireACRAccessTokenWithResourceID(msiResourceID, acrServer)
 	}
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
@@ -91,7 +94,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
-	dockerConfig := auth.CreateACRDockerCfg(acrServer, acrAccessToken)
+	dockerConfig := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
 
 	var pullSecrets v1.SecretList
 	if err := r.List(ctx, &pullSecrets, client.InNamespace(req.Namespace), client.MatchingFields{ownerKey: req.Name}); err != nil {
@@ -178,7 +181,7 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 	if containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
 		// our finalizer is present, so need to clean up ImagePullSecret reference
 		var serviceAccount v1.ServiceAccount
-		saNamespacedName := types.NamespacedName{
+		saNamespacedName := k8stypes.NamespacedName{
 			Namespace: req.Namespace,
 			Name:      "default",
 		}
@@ -205,7 +208,7 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 
 func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, req ctrl.Request, log logr.Logger) error {
 	var serviceAccount v1.ServiceAccount
-	saNamespacedName := types.NamespacedName{
+	saNamespacedName := k8stypes.NamespacedName{
 		Namespace: req.Namespace,
 		Name:      "default",
 	}
@@ -234,7 +237,7 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken auth.AccessToken) error {
+func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken types.AccessToken) error {
 	tokenExp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return err
@@ -359,7 +362,7 @@ func newBasePullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
 	return pullSecret, nil
 }
 
-func getTokenRefreshDuration(accessToken auth.AccessToken) time.Duration {
+func getTokenRefreshDuration(accessToken types.AccessToken) time.Duration {
 	exp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return 0

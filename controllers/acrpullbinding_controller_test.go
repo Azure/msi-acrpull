@@ -11,13 +11,13 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
-	"github.com/Azure/msi-acrpull/pkg/auth"
+	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 var _ = msiacrpullv1beta1.AddToScheme(scheme.Scheme)
@@ -103,7 +103,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			log := reconciler.Log.WithValues("acrpullbinding", "default")
 			ctx := context.Background()
 			req := ctrl.Request{
-				NamespacedName: types.NamespacedName{
+				NamespacedName: k8stypes.NamespacedName{
 					Namespace: "default",
 				},
 			}
@@ -138,14 +138,14 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			log := reconciler.Log.WithValues("acrpullbinding", "default")
 			ctx := context.Background()
 			req := ctrl.Request{
-				NamespacedName: types.NamespacedName{
+				NamespacedName: k8stypes.NamespacedName{
 					Namespace: "default",
 				},
 			}
 			err := reconciler.updateServiceAccount(ctx, acrBinding, req, log)
 			Expect(err).To(BeNil())
 
-			saNamespacedName := types.NamespacedName{
+			saNamespacedName := k8stypes.NamespacedName{
 				Name:      "default",
 				Namespace: "default",
 			}
@@ -217,7 +217,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 	})
 })
 
-func getTestToken(exp int64) (auth.AccessToken, error) {
+func getTestToken(exp int64) (types.AccessToken, error) {
 	signingKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -241,5 +241,5 @@ func getTestToken(exp int64) (auth.AccessToken, error) {
 		return "", err
 	}
 
-	return auth.AccessToken(tokenString), nil
+	return types.AccessToken(tokenString), nil
 }

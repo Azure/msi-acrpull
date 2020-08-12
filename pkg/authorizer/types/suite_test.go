@@ -1,4 +1,4 @@
-package auth
+package types
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestEndpoints(t *testing.T) {
+func TestAuthorizer(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Auth Test Suite")
+	RunSpecs(t, "Authorizer Types Test Suite")
 }
