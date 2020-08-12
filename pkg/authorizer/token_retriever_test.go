@@ -63,5 +63,21 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 			Expect(token).To(Equal(armToken))
 		})
+
+		It("Returns error when identity not found", func() {
+			server.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/", fmt.Sprintf("client_id=%s&resource=https://management.azure.com/&api-version=2018-02-01", testClientID)),
+					ghttp.RespondWith(404, ""),
+				))
+
+			tr := &TokenRetriever{server.URL()}
+			token, err := tr.AcquireARMToken(testClientID, "")
+
+			Expect(err).NotTo(BeNil())
+			Expect(err.Error()).To(ContainSubstring("404"))
+			Expect(server.ReceivedRequests()).Should(HaveLen(1))
+			Expect(string(token)).To(Equal(""))
+		})
 	})
 })
