@@ -13,13 +13,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const (
-	testTenantID   = "1b4e67bf-39b2-4eb1-bec3-5099dd556b07"
-	testClientID   = "a24051cb-67a7-4aa9-8abe-0765312b658a"
-	testResourceID = "/subscriptions/11b8b9f9-1812-4828-9cb5-b41ee15d63c7/resourceGroups/test-rg/providers/Microsoft.ManagedIdentities/managedIdentities/test-mi"
-	testACR        = "testcr.azurecr.io"
-)
-
 var _ = Describe("Authorizer Tests", func() {
 	var (
 		mockCtrl *gomock.Controller
