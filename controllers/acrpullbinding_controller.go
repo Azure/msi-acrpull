@@ -48,12 +48,12 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	var acrBinding msiacrpullv1beta1.AcrPullBinding
 	if err := r.Get(ctx, req.NamespacedName, &acrBinding); err != nil {
-		log.Info("Unable to fetch acrPullBinding.")
+		log.Info("unable to fetch acrPullBinding.")
 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// examine DeletionTimestamp to determine if object is under deletion
+	// examine DeletionTimestamp to determine if acr pull binding is under deletion
 	if acrBinding.ObjectMeta.DeletionTimestamp.IsZero() {
 		// the object is not being deleted, so if it does not have our finalizer,
 		// then need to add the finalizer and update the object.
@@ -116,6 +116,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 	}
 
+	// Associate the image pull secret with the default service account of the namespace
 	if err := r.updateServiceAccount(ctx, &acrBinding, req, log); err != nil {
 		return ctrl.Result{}, err
 	}

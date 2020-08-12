@@ -74,6 +74,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			err := reconciler.addFinalizer(ctx, acrBinding, log)
 			Expect(err).To(BeNil())
 			Expect(acrBinding.Finalizers).To(HaveLen(1))
+			Expect(acrBinding.Finalizers[0]).To(Equal("msi-acrpull.microsoft.com"))
 		})
 	})
 
@@ -151,6 +152,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			err = reconciler.Client.Get(ctx, saNamespacedName, serviceAccount)
 			Expect(err).To(BeNil())
 			Expect(serviceAccount.ImagePullSecrets).To(HaveLen(1))
+			Expect(serviceAccount.ImagePullSecrets[0].Name).To(Equal("test-msi-acrpull-secret"))
 		})
 	})
 
@@ -164,6 +166,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			}
 			appendImagePullSecretRef(serviceAccount, "test")
 			Expect(serviceAccount.ImagePullSecrets).To(HaveLen(1))
+			Expect(serviceAccount.ImagePullSecrets[0].Name).To(Equal("test"))
 		})
 	})
 
