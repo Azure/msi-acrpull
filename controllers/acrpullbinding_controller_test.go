@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/Azure/msi-acrpull/pkg/auth"
+	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 var _ = Describe("AcrPullBinding Controller Tests", func() {
@@ -34,7 +34,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 	})
 })
 
-func getTestToken(exp int64) (auth.AccessToken, error) {
+func getTestToken(exp int64) (types.AccessToken, error) {
 	signingKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -58,5 +58,5 @@ func getTestToken(exp int64) (auth.AccessToken, error) {
 		return "", err
 	}
 
-	return auth.AccessToken(tokenString), nil
+	return types.AccessToken(tokenString), nil
 }
