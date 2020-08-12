@@ -7,7 +7,7 @@ The architecture looks like below. As an user you will create a custom resource 
 
 Internally, the `ACRPullBindingController` watches the `ACRPullBinding` resource, and for each of them, create a secret in the namespace. The secret content is a Docker image pull config, and the password is the ACR access token that the controller exchanged from ACR using managed identity. The secret will be refreshed 30min before it expire automatically. The controller will also associate the secret to the specified service account in namespace (by default, use the default service account). With this, any pods created in the namespace will automatically pull images from the ACR using the specified managed identity credential.
 
-![Diagram](https://github.com/Azure/msi-acrpull/blob/master/docs/msi-acrpull-flow.png?raw=true)
+![Diagram](https://github.com/Azure/msi-acrpull/blob/main/docs/msi-acrpull-flow.png)
 
 # Contributing
 
