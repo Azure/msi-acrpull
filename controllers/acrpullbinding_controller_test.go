@@ -131,7 +131,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 						Name:      "test",
 						Namespace: "default",
 						Finalizers: []string{
-							"msi-acrpull.microsoft.com",
+							msiAcrPullFinalizerName,
 						},
 					},
 				}
@@ -175,7 +175,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Name:      "test",
 					Namespace: "default",
 					Finalizers: []string{
-						"msi-acrpull.microsoft.com",
+						msiAcrPullFinalizerName,
 					},
 				},
 			}
@@ -254,6 +254,13 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			strings := []string{"test-string"}
 			newStrings := removeString(strings, "test-string")
 			Expect(newStrings).To(BeEmpty())
+		})
+	})
+
+	Context("getServiceAccountName", func() {
+		It("Should get service account name", func() {
+			Expect(getServiceAccountName("")).To(Equal(defaultServiceAccountName))
+			Expect(getServiceAccountName("userspecified")).To(Equal("userspecified"))
 		})
 	})
 })
