@@ -21,11 +21,13 @@ import (
 )
 
 const (
-	ownerKey                = ".metadata.controller"
-	dockerConfigKey         = ".dockerconfigjson"
-	msiAcrPullFinalizerName = "msi-acrpull.microsoft.com"
+	ownerKey                  = ".metadata.controller"
+	dockerConfigKey           = ".dockerconfigjson"
+	msiAcrPullFinalizerName   = "msi-acrpull.microsoft.com"
+	defaultServiceAccountName = "default"
 
 	tokenRefreshBuffer = time.Minute * 30
+	defaultRetryAfter  = time.Minute * 5
 )
 
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
@@ -70,6 +72,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	msiClientID := acrBinding.Spec.ManagedIdentityClientID
 	msiResourceID := acrBinding.Spec.ManagedIdentityResourceID
+	serviceAccountName := getServiceAccountName(acrBinding.Spec.ServiceAccountName)
 	acrServer := acrBinding.Spec.AcrServer
 
 	var acrAccessToken types.AccessToken
@@ -125,8 +128,10 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	// Associate the image pull secret with the default service account of the namespace
-	if err := r.updateServiceAccount(ctx, &acrBinding, req, log); err != nil {
-		return ctrl.Result{}, err
+	if requeueAfter, err := r.updateServiceAccount(ctx, &acrBinding, req, serviceAccountName, log); err != nil {
+		return ctrl.Result{
+			RequeueAfter: requeueAfter,
+		}, err
 	}
 
 	if err := r.setSuccessStatus(ctx, &acrBinding, acrAccessToken); err != nil {
@@ -203,15 +208,16 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, req ctrl.Request, log logr.Logger) error {
+func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding,
+	req ctrl.Request, serviceAccountName string, log logr.Logger) (time.Duration, error) {
 	var serviceAccount v1.ServiceAccount
 	saNamespacedName := k8stypes.NamespacedName{
 		Namespace: req.Namespace,
-		Name:      "default",
+		Name:      serviceAccountName,
 	}
 	if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
 		log.Error(err, "Failed to get default service account")
-		return err
+		return defaultRetryAfter, err
 	}
 	pullSecretName := getPullSecretName(acrBinding.Name)
 	if !imagePullSecretRefExist(serviceAccount.ImagePullSecrets, pullSecretName) {
@@ -219,10 +225,10 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 		appendImagePullSecretRef(&serviceAccount, pullSecretName)
 		if err := r.Update(ctx, &serviceAccount); err != nil {
 			log.Error(err, "Failed to append image pull secret reference to default service account", "pullSecretName", pullSecretName)
-			return err
+			return 0, err
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken types.AccessToken) error {
@@ -305,6 +311,13 @@ func removeString(slice []string, s string) []string {
 		result = append(result, item)
 	}
 	return result
+}
+
+func getServiceAccountName(userSpecifiedName string) string {
+	if userSpecifiedName != "" {
+		return userSpecifiedName
+	}
+	return defaultServiceAccountName
 }
 
 func getPullSecretName(acrBindingName string) string {

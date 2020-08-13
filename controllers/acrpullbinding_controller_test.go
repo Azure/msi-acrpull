@@ -115,6 +115,61 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 
 	Context("updateServiceAccount", func() {
 		It("Should update service account with image pull secret reference", func() {
+			type testCase struct {
+				serviceAccountName string
+			}
+
+			testCases := []testCase{
+				{"default"},
+				{"userdefined"},
+			}
+
+			for _, testCase := range testCases {
+				serviceAccountName := testCase.serviceAccountName
+				acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "default",
+						Finalizers: []string{
+							"msi-acrpull.microsoft.com",
+						},
+					},
+				}
+				serviceAccount := &v1.ServiceAccount{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      serviceAccountName,
+						Namespace: "default",
+					},
+				}
+				reconciler := &AcrPullBindingReconciler{
+					Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding, serviceAccount),
+					Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
+					Scheme: scheme.Scheme,
+				}
+				log := reconciler.Log.WithValues("acrpullbinding", "default")
+				ctx := context.Background()
+				req := ctrl.Request{
+					NamespacedName: k8stypes.NamespacedName{
+						Namespace: "default",
+					},
+				}
+				requeueAfter, err := reconciler.updateServiceAccount(ctx, acrBinding, req, serviceAccountName, log)
+				Expect(err).To(BeNil())
+				Expect(requeueAfter).To(Equal(time.Duration(0)))
+
+				saNamespacedName := k8stypes.NamespacedName{
+					Name:      serviceAccountName,
+					Namespace: "default",
+				}
+				err = reconciler.Client.Get(ctx, saNamespacedName, serviceAccount)
+				Expect(err).To(BeNil())
+				Expect(serviceAccount.ImagePullSecrets).To(HaveLen(1))
+				Expect(serviceAccount.ImagePullSecrets[0].Name).To(Equal("test-msi-acrpull-secret"))
+			}
+		})
+
+		It("Should requeue after 5 minutes after failing to get specified service account", func() {
+			serviceAccountName := "sa1"
 			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -124,14 +179,8 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					},
 				},
 			}
-			serviceAccount := &v1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "default",
-					Namespace: "default",
-				},
-			}
 			reconciler := &AcrPullBindingReconciler{
-				Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding, serviceAccount),
+				Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding),
 				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 				Scheme: scheme.Scheme,
 			}
@@ -142,17 +191,9 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Namespace: "default",
 				},
 			}
-			err := reconciler.updateServiceAccount(ctx, acrBinding, req, log)
-			Expect(err).To(BeNil())
-
-			saNamespacedName := k8stypes.NamespacedName{
-				Name:      "default",
-				Namespace: "default",
-			}
-			err = reconciler.Client.Get(ctx, saNamespacedName, serviceAccount)
-			Expect(err).To(BeNil())
-			Expect(serviceAccount.ImagePullSecrets).To(HaveLen(1))
-			Expect(serviceAccount.ImagePullSecrets[0].Name).To(Equal("test-msi-acrpull-secret"))
+			requeueAfter, err := reconciler.updateServiceAccount(ctx, acrBinding, req, serviceAccountName, log)
+			Expect(err).To(HaveOccurred())
+			Expect(requeueAfter).To(Equal(time.Minute * 5))
 		})
 	})
 
