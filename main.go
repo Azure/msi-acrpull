@@ -12,7 +12,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	msiacrpullmicrosoftcomv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
@@ -26,7 +25,6 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = msiacrpullv1beta1.AddToScheme(scheme)
-	_ = msiacrpullmicrosoftcomv1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -59,10 +57,6 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBinding")
-		os.Exit(1)
-	}
-	if err = (&msiacrpullmicrosoftcomv1beta1.AcrPullBinding{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "AcrPullBinding")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
