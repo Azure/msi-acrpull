@@ -45,6 +45,11 @@ type AcrPullBindingSpec struct {
 	// The Managed Identity resource ID that is used to authenticate with ACR (if ClientID is specified, this is ignored)
 	// +optional
 	ManagedIdentityResourceID string `json:"managedIdentityResourceID"`
+
+	// The Service Account to associate the image pull secret with. If this is not specified, the default Service Account
+	// of the namespace will be used.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName"`
 }
 
 // AcrPullBindingStatus defines the observed state of AcrPullBinding

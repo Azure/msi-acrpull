@@ -48,6 +48,11 @@ spec:
               description: The Managed Identity resource ID that is used to authenticate
                 with ACR (if ClientID is specified, this is ignored)
               type: string
+            serviceAccountName:
+              description: The Service Account to associate the image pull secret
+                with. If this is not specified, the default Service Account of the
+                namespace will be used.
+              type: string
           required:
           - acrServer
           type: object
