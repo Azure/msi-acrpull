@@ -129,10 +129,8 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	// Associate the image pull secret with the default service account of the namespace
-	if requeueAfter, err := r.updateServiceAccount(ctx, &acrBinding, req, serviceAccountName, log); err != nil {
-		return ctrl.Result{
-			RequeueAfter: requeueAfter,
-		}, nil
+	if err := r.updateServiceAccount(ctx, &acrBinding, req, serviceAccountName, log); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	if err := r.setSuccessStatus(ctx, &acrBinding, acrAccessToken); err != nil {
@@ -211,7 +209,7 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 }
 
 func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding,
-	req ctrl.Request, serviceAccountName string, log logr.Logger) (time.Duration, error) {
+	req ctrl.Request, serviceAccountName string, log logr.Logger) error {
 	var serviceAccount v1.ServiceAccount
 	saNamespacedName := k8stypes.NamespacedName{
 		Namespace: req.Namespace,
@@ -219,7 +217,7 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 	}
 	if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
 		log.Error(err, "Failed to get service account")
-		return defaultRetryAfter, err
+		return err
 	}
 	pullSecretName := getPullSecretName(acrBinding.Name)
 	if !imagePullSecretRefExist(serviceAccount.ImagePullSecrets, pullSecretName) {
@@ -227,10 +225,10 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 		appendImagePullSecretRef(&serviceAccount, pullSecretName)
 		if err := r.Update(ctx, &serviceAccount); err != nil {
 			log.Error(err, "Failed to append image pull secret reference to default service account", "pullSecretName", pullSecretName)
-			return 0, err
+			return err
 		}
 	}
-	return 0, nil
+	return nil
 }
 
 func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken types.AccessToken) error {
