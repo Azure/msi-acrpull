@@ -46,8 +46,8 @@ func (r *AcrPullBinding) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
-// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-// +kubebuilder:webhook:verbs=create;update,path=/validate-msi-acrpull-microsoft-com-v1beta1-acrpullbinding,mutating=false,failurePolicy=fail,groups=msi-acrpull.microsoft.com,resources=acrpullbindings,versions=v1beta1,name=vacrpullbinding.kb.io
+// TODO(user): change verbs to "verbs=create;update;delete" if you want to enable create and deletion validation.
+// +kubebuilder:webhook:verbs=update,path=/validate-msi-acrpull-microsoft-com-v1beta1-acrpullbinding,mutating=false,failurePolicy=fail,groups=msi-acrpull.microsoft.com,resources=acrpullbindings,versions=v1beta1,name=vacrpullbinding.kb.io
 
 var _ webhook.Validator = &AcrPullBinding{}
 
