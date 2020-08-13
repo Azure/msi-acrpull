@@ -15,8 +15,8 @@ type Authorizer struct {
 // NewAuthorizer returns an authorizer
 func NewAuthorizer() Authorizer {
 	return Authorizer{
-		tokenRetriever: &TokenRetriever{},
-		tokenExchanger: &TokenExchanger{},
+		tokenRetriever: NewTokenRetriever(),
+		tokenExchanger: NewTokenExchanger(),
 	}
 }
 

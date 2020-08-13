@@ -6,28 +6,76 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 const (
-	armResource         = "https://management.azure.com/"
-	msiMetadataEndpoint = "http://169.254.169.254/metadata/identity/oauth2/token"
+	armResource                     = "https://management.azure.com/"
+	msiMetadataEndpoint             = "http://169.254.169.254/metadata/identity/oauth2/token"
+	defaultCacheExpirationInSeconds = 600
 )
 
 // TokenRetriever is an instance of ManagedIdentityTokenRetriever
 type TokenRetriever struct {
 	metadataEndpoint string
+	cache            sync.Map
+	cacheExpiration  time.Duration
+}
+
+type cachedToken struct {
+	token    types.AccessToken
+	notAfter time.Time
+}
+
+// NewTokenRetriever returns a new token retriever
+func NewTokenRetriever() *TokenRetriever {
+	return &TokenRetriever{
+		metadataEndpoint: msiMetadataEndpoint,
+		cache:            sync.Map{},
+		cacheExpiration:  time.Duration(defaultCacheExpirationInSeconds) * time.Second,
+	}
+}
+
+func newTestTokenRetriever(metadataEndpoint string, cacheExpirationInMilliSeconds int) *TokenRetriever {
+	return &TokenRetriever{
+		metadataEndpoint: metadataEndpoint,
+		cache:            sync.Map{},
+		cacheExpiration:  time.Duration(cacheExpirationInMilliSeconds) * time.Millisecond,
+	}
 }
 
 // AcquireARMToken acquires the managed identity ARM access token
 func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
-	endpoint := tr.metadataEndpoint
-	if endpoint == "" {
-		endpoint = msiMetadataEndpoint
+	cacheKey := strings.ToLower(clientID)
+	if cacheKey == "" {
+		cacheKey = strings.ToLower(resourceID)
 	}
 
-	msiEndpoint, err := url.Parse(endpoint)
+	cached, ok := tr.cache.Load(cacheKey)
+	if ok {
+		token := cached.(cachedToken)
+		if time.Now().UTC().Sub(token.notAfter) < 0 {
+			return token.token, nil
+		}
+
+		tr.cache.Delete(cacheKey)
+	}
+
+	token, err := tr.refreshToken(clientID, resourceID)
+	if err != nil {
+		return "", fmt.Errorf("failed to refresh ARM access token: %w", err)
+	}
+
+	tr.cache.Store(cacheKey, cachedToken{token: token, notAfter: time.Now().UTC().Add(tr.cacheExpiration)})
+	return token, nil
+}
+
+func (tr *TokenRetriever) refreshToken(clientID, resourceID string) (types.AccessToken, error) {
+	msiEndpoint, err := url.Parse(tr.metadataEndpoint)
 	if err != nil {
 		return "", err
 	}
