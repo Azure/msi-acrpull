@@ -25,7 +25,9 @@
 package v1beta1
 
 import (
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -67,7 +69,13 @@ func (r *AcrPullBinding) ValidateUpdate(oldRaw runtime.Object) error {
 	if errs := validateServiceAccountName(old.Spec.ServiceAccountName, r.Spec.ServiceAccountName, field.NewPath("serviceAccountName")); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
-	return nil
+	if len(allErrs) == 0 {
+		return nil
+	}
+
+	return apierrors.NewInvalid(
+		schema.GroupKind{Group: "msi-acrpull.microsoft.com", Kind: "AcrPullBinding"},
+		r.Name, allErrs)
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type

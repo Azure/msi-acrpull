@@ -53,6 +53,8 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	serviceAccountName := getServiceAccountName(acrBinding.Spec.ServiceAccountName)
+
 	// examine DeletionTimestamp to determine if acr pull binding is under deletion
 	if acrBinding.ObjectMeta.DeletionTimestamp.IsZero() {
 		// the object is not being deleted, so if it does not have our finalizer,
@@ -62,7 +64,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 	} else {
 		// the object is being deleted
-		if err := r.removeFinalizer(ctx, &acrBinding, req, log); err != nil {
+		if err := r.removeFinalizer(ctx, &acrBinding, req, serviceAccountName, log); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -72,7 +74,6 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	msiClientID := acrBinding.Spec.ManagedIdentityClientID
 	msiResourceID := acrBinding.Spec.ManagedIdentityResourceID
-	serviceAccountName := getServiceAccountName(acrBinding.Spec.ServiceAccountName)
 	acrServer := acrBinding.Spec.AcrServer
 
 	var acrAccessToken types.AccessToken
@@ -131,7 +132,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	if requeueAfter, err := r.updateServiceAccount(ctx, &acrBinding, req, serviceAccountName, log); err != nil {
 		return ctrl.Result{
 			RequeueAfter: requeueAfter,
-		}, err
+		}, nil
 	}
 
 	if err := r.setSuccessStatus(ctx, &acrBinding, acrAccessToken); err != nil {
@@ -179,16 +180,17 @@ func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding 
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, req ctrl.Request, log logr.Logger) error {
+func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding,
+	req ctrl.Request, serviceAccountName string, log logr.Logger) error {
 	if containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
 		// our finalizer is present, so need to clean up ImagePullSecret reference
 		var serviceAccount v1.ServiceAccount
 		saNamespacedName := k8stypes.NamespacedName{
 			Namespace: req.Namespace,
-			Name:      "default",
+			Name:      serviceAccountName,
 		}
 		if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
-			log.Error(err, "Failed to get default service account")
+			log.Error(err, "Failed to get service account")
 			return err
 		}
 		pullSecretName := getPullSecretName(acrBinding.Name)
@@ -216,7 +218,7 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 		Name:      serviceAccountName,
 	}
 	if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
-		log.Error(err, "Failed to get default service account")
+		log.Error(err, "Failed to get service account")
 		return defaultRetryAfter, err
 	}
 	pullSecretName := getPullSecretName(acrBinding.Name)

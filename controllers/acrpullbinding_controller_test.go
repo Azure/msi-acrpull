@@ -80,6 +80,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 
 	Context("removeFinalizer", func() {
 		It("Should remove finalizer from acr pull binding", func() {
+			serviceAccountName := "sa1"
 			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -91,7 +92,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			}
 			serviceAccount := &v1.ServiceAccount{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "default",
+					Name:      serviceAccountName,
 					Namespace: "default",
 				},
 			}
@@ -107,7 +108,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Namespace: "default",
 				},
 			}
-			err := reconciler.removeFinalizer(ctx, acrBinding, req, log)
+			err := reconciler.removeFinalizer(ctx, acrBinding, req, serviceAccountName, log)
 			Expect(err).To(BeNil())
 			Expect(acrBinding.Finalizers).To(BeEmpty())
 		})
