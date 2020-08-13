@@ -2,6 +2,7 @@ package authorizer
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -158,3 +159,11 @@ var _ = Describe("Token Retriever Tests", func() {
 		})
 	})
 })
+
+func newTestTokenRetriever(metadataEndpoint string, cacheExpirationInMilliSeconds int) *TokenRetriever {
+	return &TokenRetriever{
+		metadataEndpoint: metadataEndpoint,
+		cache:            sync.Map{},
+		cacheExpiration:  time.Duration(cacheExpirationInMilliSeconds) * time.Millisecond,
+	}
+}

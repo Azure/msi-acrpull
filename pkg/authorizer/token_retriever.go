@@ -40,14 +40,6 @@ func NewTokenRetriever() *TokenRetriever {
 	}
 }
 
-func newTestTokenRetriever(metadataEndpoint string, cacheExpirationInMilliSeconds int) *TokenRetriever {
-	return &TokenRetriever{
-		metadataEndpoint: metadataEndpoint,
-		cache:            sync.Map{},
-		cacheExpiration:  time.Duration(cacheExpirationInMilliSeconds) * time.Millisecond,
-	}
-}
-
 // AcquireARMToken acquires the managed identity ARM access token
 func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)

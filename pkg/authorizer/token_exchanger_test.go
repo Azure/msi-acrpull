@@ -84,3 +84,9 @@ var _ = Describe("Token Exchanger Tests", func() {
 		})
 	})
 })
+
+func newTestTokenExchanger() *TokenExchanger {
+	return &TokenExchanger{
+		acrServerScheme: "http",
+	}
+}

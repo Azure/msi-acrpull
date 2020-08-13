@@ -24,12 +24,6 @@ func NewTokenExchanger() *TokenExchanger {
 	}
 }
 
-func newTestTokenExchanger() *TokenExchanger {
-	return &TokenExchanger{
-		acrServerScheme: "http",
-	}
-}
-
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
 func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
 	tenantID, err := armToken.GetTokenTenantId()
