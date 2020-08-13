@@ -41,19 +41,21 @@ var _ = Describe("AcrPullBinding Webhook Tests", func() {
 
 	Context("ValidateUpdate", func() {
 		It("Validate changes to AcrPullBinding", func() {
+			old := createAcrBindingWithServiceAccount("old")
+			new := createAcrBindingWithServiceAccount("new")
 			testCases := []struct {
 				old     *AcrPullBinding
 				new     *AcrPullBinding
 				wantErr bool
 			}{
 				{
-					old:     createAcrBindingWithServiceAccount("old"),
-					new:     createAcrBindingWithServiceAccount("new"),
+					old:     old,
+					new:     new,
 					wantErr: true,
 				},
 				{
-					old:     createAcrBindingWithServiceAccount("old"),
-					new:     createAcrBindingWithServiceAccount("old"),
+					old:     old,
+					new:     old.DeepCopy(),
 					wantErr: false,
 				},
 			}
