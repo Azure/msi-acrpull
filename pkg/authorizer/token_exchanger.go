@@ -17,6 +17,13 @@ type TokenExchanger struct {
 	acrServerScheme string
 }
 
+// NewTokenExchanger returns a new token exchanger
+func NewTokenExchanger() *TokenExchanger {
+	return &TokenExchanger{
+		acrServerScheme: "https",
+	}
+}
+
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
 func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
 	tenantID, err := armToken.GetTokenTenantId()

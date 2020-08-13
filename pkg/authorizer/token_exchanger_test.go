@@ -47,7 +47,7 @@ var _ = Describe("Token Exchanger Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			te := &TokenExchanger{acrServerScheme: "http"}
+			te := newTestTokenExchanger()
 			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
 
 			Expect(err).To(BeNil())
@@ -73,7 +73,7 @@ var _ = Describe("Token Exchanger Tests", func() {
 					ghttp.RespondWith(403, "Unauthorized"),
 				))
 
-			te := &TokenExchanger{acrServerScheme: "http"}
+			te := newTestTokenExchanger()
 			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
 
 			Expect(err).NotTo(BeNil())
@@ -84,3 +84,9 @@ var _ = Describe("Token Exchanger Tests", func() {
 		})
 	})
 })
+
+func newTestTokenExchanger() *TokenExchanger {
+	return &TokenExchanger{
+		acrServerScheme: "http",
+	}
+}
