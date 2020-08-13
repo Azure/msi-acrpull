@@ -11,12 +11,12 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-msi-acrpull-microsoft-com-microsoft-com-v1beta1-acrpullbinding
+      path: /validate-msi-acrpull-microsoft-com-v1beta1-acrpullbinding
   failurePolicy: Fail
   name: vacrpullbinding.kb.io
   rules:
   - apiGroups:
-    - msi-acrpull.microsoft.com.microsoft.com
+    - msi-acrpull.microsoft.com
     apiVersions:
     - v1beta1
     operations:
