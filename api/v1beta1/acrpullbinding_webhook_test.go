@@ -33,7 +33,9 @@ import (
 var _ = Describe("AcrPullBinding Webhook Tests", func() {
 	Context("ValidateCreate", func() {
 		It("Validate creation of AcrPullBinding", func() {
-			// TODO(weng271190436): implement this once ValidateCreate is implemented.
+			acrBinding := createAcrBindingWithServiceAccount("test")
+			err := acrBinding.ValidateCreate()
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -68,8 +70,10 @@ var _ = Describe("AcrPullBinding Webhook Tests", func() {
 	})
 
 	Context("ValidateDelete", func() {
-		It("Validate creation of AcrPullBinding", func() {
-			// TODO(weng271190436): implement this once ValidateDelete is implemented.
+		It("Validate deletion of AcrPullBinding", func() {
+			acrBinding := createAcrBindingWithServiceAccount("test")
+			err := acrBinding.ValidateDelete()
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
