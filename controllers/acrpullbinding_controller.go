@@ -27,7 +27,6 @@ const (
 	defaultServiceAccountName = "default"
 
 	tokenRefreshBuffer = time.Minute * 30
-	defaultRetryAfter  = time.Minute * 5
 )
 
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
