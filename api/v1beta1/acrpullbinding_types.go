@@ -49,7 +49,7 @@ type AcrPullBindingSpec struct {
 	// The Service Account to associate the image pull secret with. If this is not specified, the default Service Account
 	// of the namespace will be used.
 	// +optional
-	ServiceAccountName string `json:"serviceAccountName"`
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // AcrPullBindingStatus defines the observed state of AcrPullBinding
