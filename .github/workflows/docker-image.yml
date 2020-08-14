@@ -6,13 +6,25 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  IMG: acrpullci.azurecr.io/msi-acrpull:latest
+
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
     - name: Build the Docker image
       run: make docker-build
+
+    - name: Azure Container Registry Login
+      uses: Azure/docker-login@v1
+      with:
+        login-server: acrpullci.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+
+    - name: Push to CI ACR
+      if: github.event == 'push'
+      run: make docker-push
