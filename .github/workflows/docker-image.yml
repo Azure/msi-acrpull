@@ -28,4 +28,5 @@ jobs:
     - name: Push to CI ACR
       # if: github.event == 'push'
       run: |
+        echo ${{ secrets.ACR_PASSWORD }} | docker login -u ${{ secrets.ACR_USERNAME }} --password-stdin
         make docker-push
