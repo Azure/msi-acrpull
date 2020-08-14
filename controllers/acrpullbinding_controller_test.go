@@ -112,6 +112,34 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			Expect(err).To(BeNil())
 			Expect(acrBinding.Finalizers).To(BeEmpty())
 		})
+
+		It("Should remove finalizer from acr pull binding when service account doesn't exist", func() {
+			serviceAccountName := "sa1"
+			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "default",
+					Finalizers: []string{
+						"msi-acrpull.microsoft.com",
+					},
+				},
+			}
+			reconciler := &AcrPullBindingReconciler{
+				Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding),
+				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
+				Scheme: scheme.Scheme,
+			}
+			log := reconciler.Log.WithValues("acrpullbinding", "default")
+			ctx := context.Background()
+			req := ctrl.Request{
+				NamespacedName: k8stypes.NamespacedName{
+					Namespace: "default",
+				},
+			}
+			err := reconciler.removeFinalizer(ctx, acrBinding, req, serviceAccountName, log)
+			Expect(err).To(BeNil())
+			Expect(acrBinding.Finalizers).To(BeEmpty())
+		})
 	})
 
 	Context("updateServiceAccount", func() {
