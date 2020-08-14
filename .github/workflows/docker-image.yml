@@ -15,7 +15,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build the Docker image
-      run: make docker-build
+      run: |
+        export IMG=acrpullci.azurecr.io/msi-acrpull:latest
+        make docker-build
 
     - name: Azure Container Registry Login
       uses: Azure/docker-login@v1
@@ -23,8 +25,8 @@ jobs:
         login-server: acrpullci.azurecr.io
         username: ${{ secrets.ACR_USERNAME }}
         password: ${{ secrets.ACR_PASSWORD }}
+
     - name: Push to CI ACR
       # if: github.event == 'push'
       run: |
-        docker tag msi-acrpull:latest acrpullci.azurecr.io/msi-acrpull:latest
-        docker push acrpullci.azurecr.io/msi-acrpull:latest
+        make docker-push
