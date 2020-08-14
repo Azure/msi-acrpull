@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -187,14 +188,18 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 			Name:      serviceAccountName,
 		}
 		if err := r.Get(ctx, saNamespacedName, &serviceAccount); err != nil {
-			log.Error(err, "Failed to get service account")
-			return err
-		}
-		pullSecretName := getPullSecretName(acrBinding.Name)
-		serviceAccount.ImagePullSecrets = removeImagePullSecretRef(serviceAccount.ImagePullSecrets, pullSecretName)
-		if err := r.Update(ctx, &serviceAccount); err != nil {
-			log.Error(err, "Failed to remove image pull secret reference from default service account", "pullSecretName", pullSecretName)
-			return err
+			if !apierrors.IsNotFound(err) {
+				log.Error(err, "Failed to get service account")
+				return err
+			}
+			log.Info("Service account is not found. Continue removing finalizer", "serviceAccountName", saNamespacedName.Name)
+		} else {
+			pullSecretName := getPullSecretName(acrBinding.Name)
+			serviceAccount.ImagePullSecrets = removeImagePullSecretRef(serviceAccount.ImagePullSecrets, pullSecretName)
+			if err := r.Update(ctx, &serviceAccount); err != nil {
+				log.Error(err, "Failed to remove image pull secret reference from default service account", "pullSecretName", pullSecretName)
+				return err
+			}
 		}
 
 		// remove our finalizer from the list and update it.
