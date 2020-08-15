@@ -26,5 +26,5 @@ jobs:
         password: ${{ secrets.ACR_PASSWORD }}
 
     - name: Push to CI ACR
-      if: github.event.pull_request.merged == true
+      if: github.event_name == 'push'
       run: make docker-push
