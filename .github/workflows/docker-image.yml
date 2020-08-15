@@ -19,6 +19,7 @@ jobs:
       run: make docker-build
 
     - name: Azure Container Registry Login
+      if: github.event_name == 'push'
       uses: Azure/docker-login@v1
       with:
         login-server: acrpullci.azurecr.io
