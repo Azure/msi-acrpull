@@ -4,25 +4,77 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"errors"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
+type errorFakeCtrlRuntimeClient struct {
+	client.Client
+}
+
+func (e *errorFakeCtrlRuntimeClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+	return k8serrors.NewConflict(
+		schema.GroupResource{
+			Group:    "msi-acrpull.microsoft.com",
+			Resource: "acrpullbinding",
+		},
+		"test",
+		errors.New("test error"))
+}
+
 var _ = msiacrpullv1beta1.AddToScheme(scheme.Scheme)
 
 var _ = Describe("AcrPullBinding Controller Tests", func() {
+	Context("Reconcile", func() {
+		It("Should not return error when the acr pull binding is not found", func() {
+			reconciler := &AcrPullBindingReconciler{
+				Client: fake.NewFakeClientWithScheme(scheme.Scheme),
+				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
+				Scheme: scheme.Scheme,
+			}
+			req := ctrl.Request{
+				NamespacedName: k8stypes.NamespacedName{
+					Namespace: "default",
+				},
+			}
+			_, err := reconciler.Reconcile(req)
+			Expect(err).To(BeNil())
+		})
+
+		It("Should return error when getting acr pull binding returns error other than NotFound", func() {
+			reconciler := &AcrPullBindingReconciler{
+				Client: &errorFakeCtrlRuntimeClient{fake.NewFakeClientWithScheme(scheme.Scheme)},
+				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
+				Scheme: scheme.Scheme,
+			}
+			req := ctrl.Request{
+				NamespacedName: k8stypes.NamespacedName{
+					Namespace: "default",
+				},
+			}
+			_, err := reconciler.Reconcile(req)
+			Expect(err).To(Not(BeNil()))
+			Expect(err.Error()).To(ContainSubstring("test error"))
+		})
+	})
+
 	Context("getTokenRefreshDuration", func() {
 		It("Should return 0 for negative durations", func() {
 			token, err := getTestToken(time.Now().Add(-time.Hour).Unix())
