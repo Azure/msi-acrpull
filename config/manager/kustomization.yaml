@@ -5,3 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: mcr.microsoft.com/aks/msi-acrpull
+  newTag: v0.1.0-alpha
