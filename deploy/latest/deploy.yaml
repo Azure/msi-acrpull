@@ -172,7 +172,7 @@ metadata:
   name: msi-acrpull-controller-manager
   namespace: msi-acrpull-system
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       control-plane: controller-manager
@@ -192,7 +192,7 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 30Mi
+            memory: 100Mi
           requests:
             cpu: 100m
             memory: 20Mi
