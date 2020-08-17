@@ -1,6 +1,34 @@
 
 # MSI ACR Pull
-MSI ACR Pull enables deployments in a Kubernetes cluster to use any user assigned managed identity to pull images from Azure container registry. With this, each application can use its own identity to pull container images.
+MSI ACR Pull enables deployments in a Kubernetes cluster to use any user assigned managed identity to pull images from Azure Container Registry. With this, each application can use its own identity to pull container images.
+
+# Install
+Run following command to install latest build from main branch. It will install the needed custom resource definition `ACRPullBinding` and deploy msi-acrpull controllers in `msi-acrpull-system` namespace.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/crd.yaml -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/deploy.yaml
+```
+
+# How to use
+> NOTE: following steps assumes you already have:
+> 1) An Kubernetes cluster, and have user assigned managed identities on node pool VMSS.
+> 1) An ACR, and the user assigned identity has [AcrPull](https://docs.microsoft.com/en-us/azure/container-registry/container-registry-roles#pull-image) role assigned on ACR.
+
+Once msi-acrpull is installed to your cluster, all you need is to deploy a custom resource `AcrPullBinding` to the application namesapce to bind an user assigned identity to an ACR. Following sample specifies all pods using default service account in the namespace to use user managed identity `my-acr-puller` to pull image from `veryimportantcr.azurecr.io`.
+
+```yaml
+apiVersion: msi-acrpull.microsoft.com/v1beta1
+kind: AcrPullBinding
+metadata:
+  name: acrpulltest
+spec:
+  acrServer: veryimportantcr.azurecr.io
+  managedIdentityResourceID: /subscriptions/712288dc-f816-4242-b73f-a0a87265dcc8/resourceGroups/my-identities/providers/Microsoft.ManagedIdentity/userAssignedIdentities/my-acr-puller
+```
+
+Once the custom resource deployed, you can deploy your application to pull images from the ACR. No changes to the application deployment yaml is needed. 
+
+> If the application pod uses a custom service account, then specify `serviceAccountName` property in AcrPullBinding spec.
 
 # How it works
 The architecture looks like below. As an user you will create a custom resource `ACRPullBinding`, which binds a managed identity (using client ID or resource ID) to an Azure container registry (using its FQDN). 
