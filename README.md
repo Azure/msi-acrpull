@@ -20,7 +20,6 @@ metadata:
   name: acrpulltest
 spec:
   acrServer: veryimportantcr.azurecr.io
-  managedIdentityClientID: ""
   managedIdentityResourceID: /subscriptions/712288dc-f816-4242-b73f-a0a87265dcc8/resourceGroups/my-identities/providers/Microsoft.ManagedIdentity/userAssignedIdentities/my-acr-puller
 ```
 
