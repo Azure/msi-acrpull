@@ -21,6 +21,8 @@ jobs:
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
+      with:
+        ref: ${{ github.head_ref }}
 
     - name: Get dependencies
       run: go mod download
@@ -32,7 +34,9 @@ jobs:
       run: make test
     
     - name: Update release latest
-      run: make release-latest
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash
+        make release-latest
     
     - name: Commit latest release
       uses: stefanzweifel/git-auto-commit-action@v4
