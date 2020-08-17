@@ -31,6 +31,14 @@ jobs:
     - name: Test
       run: make test
     
+    - name: Update release latest
+      run: make release-latest
+    
+    - name: Commit latest release
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Apply latest release artifacts
+    
     - name: Upload Code Coverage
       uses: codecov/codecov-action@v1
       with:
