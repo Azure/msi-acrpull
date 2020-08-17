@@ -1,6 +1,14 @@
 
 # MSI ACR Pull
-MSI ACR Pull enables deployments in a Kubernetes cluster to use any user assigned managed identity to pull images from Azure container registry. With this, each application can use its own identity to pull container images.
+MSI ACR Pull enables deployments in a Kubernetes cluster to use any user assigned managed identity to pull images from Azure Container Registry. With this, each application can use its own identity to pull container images.
+
+# Install
+Run following command to install latest build from main branch. It will install the needed custom resource definition `ACRPullBinding` and deploy msi-acrpull controllers in `msi-acrpull-system` namespace.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/crd.yaml
+kubectl apply -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/deploy.yaml
+```
 
 # How it works
 The architecture looks like below. As an user you will create a custom resource `ACRPullBinding`, which binds a managed identity (using client ID or resource ID) to an Azure container registry (using its FQDN). 
