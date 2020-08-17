@@ -48,9 +48,12 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	var acrBinding msiacrpullv1beta1.AcrPullBinding
 	if err := r.Get(ctx, req.NamespacedName, &acrBinding); err != nil {
-		log.Error(err, "unable to fetch acrPullBinding.")
-
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "unable to fetch acrPullBinding.")
+			return ctrl.Result{}, err
+		}
+		log.Info("AcrPullBinding is not found. Ignore because this is expected to happen when it is being deleted.")
+		return ctrl.Result{}, nil
 	}
 
 	serviceAccountName := getServiceAccountName(acrBinding.Spec.ServiceAccountName)
