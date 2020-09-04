@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Azure/msi-acrpull/controllers"
+	"github.com/Azure/msi-acrpull/pkg/authorizer"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -19,6 +20,13 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+
+	defaultACRServerEnvKey="ACR_SERVER"
+	defaultACRServer string
+	defaultManagedIdentityResourceIDEnvKey="MANAGED_IDENTITY_RESOURCE_ID"
+	defaultManagedIdentityResourceID string
+	defaultManagedIdentityClientIDEnvKey="MANAGED_IDENTITY_CLIENT_ID"
+	defaultManagedIdentityClientID string
 )
 
 func init() {
@@ -36,6 +44,9 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
+	defaultACRServer = os.Getenv(defaultACRServerEnvKey)
+	defaultManagedIdentityResourceID = os.Getenv(defaultManagedIdentityResourceIDEnvKey)
+	defaultManagedIdentityClientID = os.Getenv(defaultManagedIdentityClientIDEnvKey)
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
@@ -50,17 +61,21 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
-	if err = (&controllers.AcrPullBindingReconciler{
+	apbReconciler := &controllers.AcrPullBindingReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("AcrPullBinding"),
 		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+		Auth: authorizer.NewAuthorizer(),
+		DefaultACRServer: defaultACRServer,
+		DefaultManagedIdentityResourceID: defaultManagedIdentityResourceID,
+		DefaultManagedIdentityClientID: defaultManagedIdentityClientID,
+	}
+
+	if err = apbReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBinding")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
-
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")

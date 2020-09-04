@@ -13,8 +13,8 @@ type Authorizer struct {
 }
 
 // NewAuthorizer returns an authorizer
-func NewAuthorizer() Authorizer {
-	return Authorizer{
+func NewAuthorizer() *Authorizer {
+	return &Authorizer{
 		tokenRetriever: NewTokenRetriever(),
 		tokenExchanger: NewTokenExchanger(),
 	}
