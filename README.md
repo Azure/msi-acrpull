@@ -29,6 +29,70 @@ spec:
 Once the custom resource deployed, you can deploy your application to pull images from the ACR. No changes to the application deployment yaml is needed. 
 
 > If the application pod uses a custom service account, then specify `serviceAccountName` property in AcrPullBinding spec.
+## Default Values
+If you use the same MSI and ACR endpoint for all your container, you can provide a default value to the controller.
+To do so, set the environment variables on the `msi-acrpull-controller-manager` container :
+
+3 default values can be set : 
+- ACR_SERVER
+- MANAGED_IDENTITY_RESOURCE_ID
+- MANAGED_IDENTITY_CLIENT_ID
+
+
+These environment variables are used if the `ACRPullBinding` crd does not set them.
+Deployment spec example: 
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: msi-acrpull-controller-manager
+  namespace: msi-acrpull-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --metrics-addr=127.0.0.1:8080
+        - --enable-leader-election
+        env:
+        - name: "ACR_SERVER"
+          value: "myacr.azurecr.io"
+        - name: "MANAGED_IDENTITY_RESOURCE_ID"
+          value: "<you managed identity resource id>"
+        command:
+        - /manager
+        image: mcr.microsoft.com/aks/msi-acrpull:v0.1.0-alpha
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=10
+        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+      terminationGracePeriodSeconds: 10
+```
+
 
 # How it works
 The architecture looks like below. As an user you will create a custom resource `ACRPullBinding`, which binds a managed identity (using client ID or resource ID) to an Azure container registry (using its FQDN). 
