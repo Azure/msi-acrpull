@@ -17,21 +17,19 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+const (
+	defaultACRServerEnvKey                 = "ACR_SERVER"
+	defaultManagedIdentityResourceIDEnvKey = "MANAGED_IDENTITY_RESOURCE_ID"
+	defaultManagedIdentityClientIDEnvKey   = "MANAGED_IDENTITY_CLIENT_ID"
+)
+
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
-
-	defaultACRServerEnvKey="ACR_SERVER"
-	defaultACRServer string
-	defaultManagedIdentityResourceIDEnvKey="MANAGED_IDENTITY_RESOURCE_ID"
-	defaultManagedIdentityResourceID string
-	defaultManagedIdentityClientIDEnvKey="MANAGED_IDENTITY_CLIENT_ID"
-	defaultManagedIdentityClientID string
 )
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-
 	_ = msiacrpullv1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
@@ -44,9 +42,9 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.Parse()
-	defaultACRServer = os.Getenv(defaultACRServerEnvKey)
-	defaultManagedIdentityResourceID = os.Getenv(defaultManagedIdentityResourceIDEnvKey)
-	defaultManagedIdentityClientID = os.Getenv(defaultManagedIdentityClientIDEnvKey)
+	defaultACRServer := os.Getenv(defaultACRServerEnvKey)
+	defaultManagedIdentityResourceID := os.Getenv(defaultManagedIdentityResourceIDEnvKey)
+	defaultManagedIdentityClientID := os.Getenv(defaultManagedIdentityClientIDEnvKey)
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
@@ -62,13 +60,13 @@ func main() {
 		os.Exit(1)
 	}
 	apbReconciler := &controllers.AcrPullBindingReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("AcrPullBinding"),
-		Scheme: mgr.GetScheme(),
-		Auth: authorizer.NewAuthorizer(),
-		DefaultACRServer: defaultACRServer,
+		Client:                           mgr.GetClient(),
+		Log:                              ctrl.Log.WithName("controllers").WithName("AcrPullBinding"),
+		Scheme:                           mgr.GetScheme(),
+		Auth:                             authorizer.NewAuthorizer(),
+		DefaultACRServer:                 defaultACRServer,
 		DefaultManagedIdentityResourceID: defaultManagedIdentityResourceID,
-		DefaultManagedIdentityClientID: defaultManagedIdentityClientID,
+		DefaultManagedIdentityClientID:   defaultManagedIdentityClientID,
 	}
 
 	if err = apbReconciler.SetupWithManager(mgr); err != nil {
