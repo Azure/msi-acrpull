@@ -21,5 +21,8 @@ FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER nonroot:nonroot
-
+# These environment variable can be set at runtime to provide default values
+ENV ACR_SERVER=""
+ENV MANAGED_IDENTITY_RESOURCE_ID=""
+ENV MANAGED_IDENTITY_CLIENT_ID=""
 ENTRYPOINT ["/manager"]

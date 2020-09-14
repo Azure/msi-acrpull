@@ -33,8 +33,12 @@ const (
 // AcrPullBindingReconciler reconciles a AcrPullBinding object
 type AcrPullBindingReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log                              logr.Logger
+	Scheme                           *runtime.Scheme
+	Auth                             authorizer.Interface
+	DefaultManagedIdentityResourceID string
+	DefaultManagedIdentityClientID   string
+	DefaultACRServer                 string
 }
 
 // +kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings,verbs=get;list;watch;create;update;patch;delete
@@ -75,19 +79,14 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, nil
 	}
 
-	msiClientID := acrBinding.Spec.ManagedIdentityClientID
-	msiResourceID := acrBinding.Spec.ManagedIdentityResourceID
-	acrServer := acrBinding.Spec.AcrServer
-
+	msiClientID, msiResourceID, acrServer := specOrDefault(r, acrBinding.Spec)
 	var acrAccessToken types.AccessToken
 	var err error
 
-	az := authorizer.NewAuthorizer()
-
 	if msiClientID != "" {
-		acrAccessToken, err = az.AcquireACRAccessTokenWithClientID(msiClientID, acrServer)
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithClientID(msiClientID, acrServer)
 	} else {
-		acrAccessToken, err = az.AcquireACRAccessTokenWithResourceID(msiResourceID, acrServer)
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithResourceID(msiResourceID, acrServer)
 	}
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
@@ -144,6 +143,22 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	return ctrl.Result{
 		RequeueAfter: getTokenRefreshDuration(acrAccessToken),
 	}, nil
+}
+
+func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) (string, string, string) {
+	msiClientID := spec.ManagedIdentityClientID
+	msiResourceID := spec.ManagedIdentityResourceID
+	acrServer := spec.AcrServer
+	if msiClientID == "" {
+		msiClientID = r.DefaultManagedIdentityClientID
+	}
+	if msiResourceID == "" {
+		msiResourceID = r.DefaultManagedIdentityResourceID
+	}
+	if acrServer == "" {
+		acrServer = r.DefaultACRServer
+	}
+	return msiClientID, msiResourceID, acrServer
 }
 
 func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
