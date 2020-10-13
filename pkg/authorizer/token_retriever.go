@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,8 @@ import (
 )
 
 const (
-	armResource                     = "https://management.azure.com/"
+	defaultARMResource              = "https://management.azure.com/"
+	customARMResourceEnvVar         = "ARM_RESOURCE"
 	msiMetadataEndpoint             = "http://169.254.169.254/metadata/identity/oauth2/token"
 	defaultCacheExpirationInSeconds = 600
 )
@@ -79,7 +81,13 @@ func (tr *TokenRetriever) refreshToken(clientID, resourceID string) (types.Acces
 		parameters.Add("mi_res_id", resourceID)
 	}
 
-	parameters.Add("resource", armResource)
+	customARMResource := os.Getenv(customARMResourceEnvVar)
+	if customARMResource == "" {
+		parameters.Add("resource", defaultARMResource)
+	} else {
+		parameters.Add("resource", customARMResource)
+	}
+
 	parameters.Add("api-version", "2018-02-01")
 
 	msiEndpoint.RawQuery = parameters.Encode()

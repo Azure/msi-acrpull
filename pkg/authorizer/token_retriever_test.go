@@ -2,6 +2,7 @@ package authorizer
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -39,6 +40,30 @@ var _ = Describe("Token Retriever Tests", func() {
 
 			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken("", testResourceID)
+
+			Expect(err).To(BeNil())
+			Expect(server.ReceivedRequests()).Should(HaveLen(1))
+			Expect(token).To(Equal(armToken))
+		})
+
+		It("Get ARM Token Against Custom ARM Resource Successfully", func() {
+			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
+			Expect(err).ToNot(HaveOccurred())
+
+			tokenResp := &tokenResponse{AccessToken: string(armToken)}
+
+			os.Setenv(customARMResourceEnvVar, "https://management.usgovcloudapi.net/")
+
+			server.AppendHandlers(
+				ghttp.CombineHandlers(
+					ghttp.VerifyRequest("GET", "/", fmt.Sprintf("mi_res_id=%s&resource=https://management.usgovcloudapi.net/&api-version=2018-02-01", testResourceID)),
+					ghttp.RespondWithJSONEncoded(200, tokenResp),
+				))
+
+			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			token, err := tr.AcquireARMToken("", testResourceID)
+
+			os.Unsetenv(customARMResourceEnvVar)
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))

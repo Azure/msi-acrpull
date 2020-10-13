@@ -60,17 +60,17 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			Expect(err).To(BeNil())
 		})
 
-		It("Should use defaults when no parameters defined", func(){
+		It("Should use defaults when no parameters defined", func() {
 			mockCtrl := gomock.NewController(GinkgoT())
 			fakeAuth := mock_authorizer.NewMockInterface(mockCtrl)
 
 			reconciler := &AcrPullBindingReconciler{
-				Client: fake.NewFakeClientWithScheme(scheme.Scheme),
-				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
-				Scheme: scheme.Scheme,
-				Auth: fakeAuth,
+				Client:                           fake.NewFakeClientWithScheme(scheme.Scheme),
+				Log:                              ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
+				Scheme:                           scheme.Scheme,
+				Auth:                             fakeAuth,
 				DefaultManagedIdentityResourceID: "defaultResourceID",
-				DefaultACRServer: "DefaultACRServer",
+				DefaultACRServer:                 "DefaultACRServer",
 			}
 			fakeAuth.EXPECT().AcquireACRAccessTokenWithResourceID(
 				gomock.Eq(reconciler.DefaultManagedIdentityResourceID),
@@ -88,7 +88,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			req := ctrl.Request{
 				NamespacedName: k8stypes.NamespacedName{
 					Namespace: "default",
-					Name: "test",
+					Name:      "test",
 				},
 			}
 			reconciler.Reconcile(req)
