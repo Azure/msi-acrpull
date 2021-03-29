@@ -1,0 +1,11 @@
+{{- if .Values.armAuth -}}
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentity
+metadata:
+  name: msi-acrpull
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: 0
+  resourceID: {{ .Values.armAuth.identityResourceID }}
+  clientID: {{ .Values.armAuth.identityClientID }}
+  {{- end}}

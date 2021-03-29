@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "charts.fullname" . }}
+  labels:
+    {{- include "charts.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "charts.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        aadpodidbinding: {{ .Release.Name }}
+        {{- include "charts.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "charts.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      containers:
+        - name: manager
+          securityContext:
+            {{- toYaml .Values.msiacrpull.securityContext | nindent 12 }}
+          image: "{{ .Values.msiacrpull.image.repository }}:{{ .Values.msiacrpull.image.tag | default .Chart.AppVersion }}"
+          args:
+          - --metrics-addr=127.0.0.1:8080
+          - --enable-leader-election
+          command:
+          - /manager
+          imagePullPolicy: {{ .Values.msiacrpull.image.pullPolicy }}
+          {{- with .Values.msiacrpull.env }}
+          env:          
+            {{- toYaml . | nindent 10 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.msiacrpull.resources | nindent 12 }}
+        - name: kube-rbac-proxy
+          securityContext:
+            {{- toYaml .Values.kuberbacproxy.securityContext | nindent 12 }}
+          image: "{{ .Values.kuberbacproxy.image.repository }}:{{ .Values.kuberbacproxy.image.tag }}"
+          args:
+          - --secure-listen-address=0.0.0.0:8443
+          - --upstream=http://127.0.0.1:8080/
+          - --logtostderr=true
+          - --v=10
+          imagePullPolicy: {{ .Values.kuberbacproxy.image.pullPolicy }}
+          ports:
+          - containerPort: 8443
+            name: https
+          resources:
+            {{- toYaml .Values.kuberbacproxy.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
