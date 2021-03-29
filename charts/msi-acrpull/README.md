@@ -6,8 +6,6 @@
 
 ```console
 helm repo add msi-acrpull https://raw.githubusercontent.com/Azure/msi-acrpull/main/charts
-
-# Helm 3
 helm install msi-acrpull msi-acrpull/msi-acrpull
 
 ## Helm chart and msi-acrpull versions
@@ -39,13 +37,7 @@ To uninstall/delete the last deployment:
 
 ```console
 helm ls
-
-# Helm 3
 helm uninstall <ReleaseName>
-
-# Helm 2
-helm delete <ReleaseName> --purge
-```
 
 The command removes all the Kubernetes components associated with the chart and deletes the release.
 
