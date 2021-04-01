@@ -44,7 +44,7 @@ The command removes all the Kubernetes components associated with the chart and 
 > The CRD created by the chart are not removed by default and should be manually cleaned up (if required)
 
 ```bash
-kubectl delete crd amsi-acrpull.microsoft.com/v1beta1
+kubectl delete crd msi-acrpull.microsoft.com/v1beta1
 ```
 
 ## Configuration
@@ -73,7 +73,9 @@ The following tables list the configurable parameters of the msi-acrpull chart a
 | `podAnnotations`                       | Pod Annotations                                                                                                                                                                                                                                                                                                  | `{}`
 | `nodeSelector`                       | Specifies node labels this pod should be deployed to                                                                                                                                                                                                                                                                                                 | `{}`  
 | `affinity`                       | Pod Affinity                                                                                                                                                                                                                                                                                                 | `{}` 
-| `tolerations`                       | Pod Tolerations                                                                                                                                                                                                                                                                                                | `[]`                                       
+| `tolerations`                       | Pod Tolerations                                                                                                                                                                                                                                                                                                | `[]`
+| `armAuth.identityResourceID`                       | Identity Resource ID                                                                                                                                                                                                                                                                                                | ``   
+| `armAuth.identityClientID`                       | Identity Client ID                                                                                                                                                                                                                                                                                                | ``                                          
 
 ## Troubleshooting
 
