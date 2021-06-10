@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"path"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -147,12 +148,12 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) (string, string, string) {
 	msiClientID := spec.ManagedIdentityClientID
-	msiResourceID := spec.ManagedIdentityResourceID
+	msiResourceID := path.Clean(spec.ManagedIdentityResourceID)
 	acrServer := spec.AcrServer
 	if msiClientID == "" {
 		msiClientID = r.DefaultManagedIdentityClientID
 	}
-	if msiResourceID == "" {
+	if msiResourceID == "." {
 		msiResourceID = r.DefaultManagedIdentityResourceID
 	}
 	if acrServer == "" {

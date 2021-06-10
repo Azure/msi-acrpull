@@ -346,6 +346,16 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 		})
 	})
 
+	Context("specOrDefaultTest", func() {
+		It("should deduplicate double slash", func() {
+			reconciler := &AcrPullBindingReconciler{}
+			spec := msiacrpullv1beta1.AcrPullBindingSpec{
+				ManagedIdentityResourceID: "/resourcegroup//doubleslash/singleslash/",
+			}
+			_, msiResourceId, _ := specOrDefault(reconciler, spec)
+			Expect(msiResourceId).To(Equal("/resourcegroup/doubleslash/singleslash"))
+		})
+	})
 	Context("getServiceAccountName", func() {
 		It("Should get service account name", func() {
 			Expect(getServiceAccountName("")).To(Equal(defaultServiceAccountName))
