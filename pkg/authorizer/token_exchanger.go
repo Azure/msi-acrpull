@@ -49,7 +49,7 @@ func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acr
 
 	req, err := http.NewRequest("POST", exchangeURL, strings.NewReader(parameters.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("failed to construct token exchange reqeust: %w", err)
+		return "", fmt.Errorf("failed to construct token exchange request: %w", err)
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
