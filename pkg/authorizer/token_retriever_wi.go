@@ -8,10 +8,13 @@ import (
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
 )
 
-const authorityHost = "https://login.microsoftonline.com/"
-
 // Get auth token from service account token
-func AcquireARMTokenFromServiceAccountToken(ctx context.Context, tenantID, clientID string) (base.authResult, error) {
+func AcquireARMTokenFromServiceAccountToken(ctx context.Context, tenantID, clientID string) (types.AccessToken, error) {
+
+	const (
+		authorityHost = "https://login.microsoftonline.com/"
+		resource      = "https://management.azure.com/.default"
+	)
 
 	cred := confidential.NewCredFromAssertionCallback(func(context.Context, confidential.AssertionRequestOptions) (string, error) {
 		return readJWTFromFS()
@@ -30,7 +33,7 @@ func AcquireARMTokenFromServiceAccountToken(ctx context.Context, tenantID, clien
 		return "", fmt.Errorf("Unable to acquire bearer token: %w", err)
 	}
 
-	return authResult, nil
+	return authResult.AccessToken, nil
 }
 
 func readJWTFromFS() (string, error) {
