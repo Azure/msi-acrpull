@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
+	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential"
 )
 
 const (
@@ -19,6 +21,8 @@ const (
 	customARMResourceEnvVar         = "ARM_RESOURCE"
 	msiMetadataEndpoint             = "http://169.254.169.254/metadata/identity/oauth2/token"
 	defaultCacheExpirationInSeconds = 600
+	authorityHost                   = "https://login.microsoftonline.com/"
+	resource                        = "https://management.azure.com/.default"
 )
 
 // TokenRetriever is an instance of ManagedIdentityTokenRetriever
@@ -131,4 +135,51 @@ func closeResponse(resp *http.Response) {
 		return
 	}
 	resp.Body.Close()
+}
+
+// Get auth token from service account token
+func (tr *TokenRetriever) AcquireARMTokenFromServiceAccountToken(ctx context.Context, tenantID, clientID string) (types.AccessToken, error) {
+	cacheKey := strings.ToLower(clientID)
+	cached, ok := tr.cache.Load(cacheKey)
+	if ok {
+		token := cached.(cachedToken)
+		if time.Now().UTC().Sub(token.notAfter) < 0 {
+			return token.token, nil
+		}
+
+		tr.cache.Delete(cacheKey)
+	}
+
+	// refresh token
+	cred := confidential.NewCredFromAssertionCallback(func(context.Context, confidential.AssertionRequestOptions) (string, error) {
+		return readJWTFromFS()
+	})
+
+	confidentialClientApp, err := confidential.New(
+		clientID,
+		cred,
+		confidential.WithAuthority(fmt.Sprintf("%s%s/oauth2/token", authorityHost, tenantID)))
+	if err != nil {
+		return "", fmt.Errorf("unable to get new confidential client app: %w", err)
+	}
+
+	authResult, err := confidentialClientApp.AcquireTokenByCredential(ctx, []string{resource})
+	if err != nil {
+		return "", fmt.Errorf("unable to acquire bearer token: %w", err)
+	}
+
+	token := types.AccessToken(authResult.AccessToken)
+	tr.cache.Store(cacheKey, cachedToken{token: token, notAfter: time.Now().UTC().Add(tr.cacheExpiration)})
+	return token, nil
+}
+
+func readJWTFromFS() (string, error) {
+	const SATokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+	f, err := os.ReadFile(SATokenPath)
+	if err != nil {
+		return "", err
+	}
+
+	return string(f), nil
 }
