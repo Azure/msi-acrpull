@@ -25,11 +25,19 @@ const (
 	resource                        = "https://management.azure.com/.default"
 )
 
-// TokenRetriever is an instance of ManagedIdentityTokenRetriever
-type TokenRetriever struct {
-	metadataEndpoint string
-	cache            sync.Map
-	cacheExpiration  time.Duration
+// TokenRetriever is an instance of ManagedIdentityTokenRetriever or WorkloadIdentityTokenTriever
+
+type BaseTokenRetriever struct {
+	cache           sync.Map
+	cacheExpiration time.Duration
+}
+type ManagedIdentityTokenRetriever struct {
+	metadataEndpoint   string
+	baseTokenRetriever *BaseTokenRetriever
+}
+
+type WorkloadIdentityTokenRetriever struct {
+	baseTokenRetriever *BaseTokenRetriever
 }
 
 type cachedToken struct {
@@ -37,30 +45,44 @@ type cachedToken struct {
 	notAfter time.Time
 }
 
+var baseTokenRetriever = NewBaseTokenRetriever()
+
+func NewBaseTokenRetriever() *BaseTokenRetriever {
+	return &BaseTokenRetriever{
+		cache:           sync.Map{},
+		cacheExpiration: time.Duration(defaultCacheExpirationInSeconds) * time.Second,
+	}
+}
+
 // NewTokenRetriever returns a new token retriever
-func NewTokenRetriever() *TokenRetriever {
-	return &TokenRetriever{
-		metadataEndpoint: msiMetadataEndpoint,
-		cache:            sync.Map{},
-		cacheExpiration:  time.Duration(defaultCacheExpirationInSeconds) * time.Second,
+func NewManagedIdentityTokenRetriever() *ManagedIdentityTokenRetriever {
+	return &ManagedIdentityTokenRetriever{
+		metadataEndpoint:   msiMetadataEndpoint,
+		baseTokenRetriever: baseTokenRetriever,
+	}
+}
+
+func NewWorkloadIdentityTokenRetriever() *WorkloadIdentityTokenRetriever {
+	return &WorkloadIdentityTokenRetriever{
+		baseTokenRetriever: baseTokenRetriever,
 	}
 }
 
 // AcquireARMToken acquires the managed identity ARM access token
-func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
+func (tr *ManagedIdentityTokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	if cacheKey == "" {
 		cacheKey = strings.ToLower(resourceID)
 	}
 
-	cached, ok := tr.cache.Load(cacheKey)
+	cached, ok := tr.baseTokenRetriever.cache.Load(cacheKey)
 	if ok {
 		token := cached.(cachedToken)
 		if time.Now().UTC().Sub(token.notAfter) < 0 {
 			return token.token, nil
 		}
 
-		tr.cache.Delete(cacheKey)
+		tr.baseTokenRetriever.cache.Delete(cacheKey)
 	}
 
 	token, err := tr.refreshToken(clientID, resourceID)
@@ -68,11 +90,11 @@ func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (t
 		return "", fmt.Errorf("failed to refresh ARM access token: %w", err)
 	}
 
-	tr.cache.Store(cacheKey, cachedToken{token: token, notAfter: time.Now().UTC().Add(tr.cacheExpiration)})
+	tr.baseTokenRetriever.cache.Store(cacheKey, cachedToken{token: token, notAfter: time.Now().UTC().Add(tr.baseTokenRetriever.cacheExpiration)})
 	return token, nil
 }
 
-func (tr *TokenRetriever) refreshToken(clientID, resourceID string) (types.AccessToken, error) {
+func (tr *ManagedIdentityTokenRetriever) refreshToken(clientID, resourceID string) (types.AccessToken, error) {
 	msiEndpoint, err := url.Parse(tr.metadataEndpoint)
 	if err != nil {
 		return "", err
@@ -138,16 +160,17 @@ func closeResponse(resp *http.Response) {
 }
 
 // Get auth token from service account token
-func (tr *TokenRetriever) AcquireARMTokenFromServiceAccountToken(ctx context.Context, tenantID, clientID string) (types.AccessToken, error) {
+func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
+	//AcquireARMTokenFromServiceAccountToken(ctx context.Context, tenantID, clientID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
-	cached, ok := tr.cache.Load(cacheKey)
+	cached, ok := tr.baseTokenRetriever.cache.Load(cacheKey)
 	if ok {
 		token := cached.(cachedToken)
 		if time.Now().UTC().Sub(token.notAfter) < 0 {
 			return token.token, nil
 		}
 
-		tr.cache.Delete(cacheKey)
+		tr.baseTokenRetriever.cache.Delete(cacheKey)
 	}
 
 	// refresh token
@@ -169,7 +192,7 @@ func (tr *TokenRetriever) AcquireARMTokenFromServiceAccountToken(ctx context.Con
 	}
 
 	token := types.AccessToken(authResult.AccessToken)
-	tr.cache.Store(cacheKey, cachedToken{token: token, notAfter: time.Now().UTC().Add(tr.cacheExpiration)})
+	tr.baseTokenRetriever.cache.Store(cacheKey, cachedToken{token: token, notAfter: time.Now().UTC().Add(tr.baseTokenRetriever.cacheExpiration)})
 	return token, nil
 }
 

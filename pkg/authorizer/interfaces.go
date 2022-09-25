@@ -10,8 +10,8 @@ type Interface interface {
 	AcquireACRAccessTokenWithClientID(clientID string, acrFQDN string) (types.AccessToken, error)
 }
 
-// ManagedIdentityTokenRetriever is the interface to acquire an ARM access token.
-type ManagedIdentityTokenRetriever interface {
+// IdentityTokenRetriever is the interface to acquire an ARM access token.
+type IdentityTokenRetriever interface {
 	AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error)
 }
 
