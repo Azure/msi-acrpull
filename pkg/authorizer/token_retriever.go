@@ -21,23 +21,21 @@ const (
 	customARMResourceEnvVar         = "ARM_RESOURCE"
 	msiMetadataEndpoint             = "http://169.254.169.254/metadata/identity/oauth2/token"
 	defaultCacheExpirationInSeconds = 600
-	authorityHost                   = "https://login.microsoftonline.com/"
-	resource                        = "https://management.azure.com/.default"
 )
 
 // TokenRetriever is an instance of ManagedIdentityTokenRetriever or WorkloadIdentityTokenTriever
 
-type BaseTokenRetriever struct {
+type baseTokenRetriever struct {
 	cache           sync.Map
 	cacheExpiration time.Duration
 }
 type ManagedIdentityTokenRetriever struct {
 	metadataEndpoint   string
-	baseTokenRetriever *BaseTokenRetriever
+	baseTokenRetriever *baseTokenRetriever
 }
 
 type WorkloadIdentityTokenRetriever struct {
-	baseTokenRetriever *BaseTokenRetriever
+	baseTokenRetriever *baseTokenRetriever
 }
 
 type cachedToken struct {
@@ -45,10 +43,8 @@ type cachedToken struct {
 	notAfter time.Time
 }
 
-var baseTokenRetriever = NewBaseTokenRetriever()
-
-func NewBaseTokenRetriever() *BaseTokenRetriever {
-	return &BaseTokenRetriever{
+func newBaseTokenRetriever() *baseTokenRetriever {
+	return &baseTokenRetriever{
 		cache:           sync.Map{},
 		cacheExpiration: time.Duration(defaultCacheExpirationInSeconds) * time.Second,
 	}
@@ -58,13 +54,13 @@ func NewBaseTokenRetriever() *BaseTokenRetriever {
 func NewManagedIdentityTokenRetriever() *ManagedIdentityTokenRetriever {
 	return &ManagedIdentityTokenRetriever{
 		metadataEndpoint:   msiMetadataEndpoint,
-		baseTokenRetriever: baseTokenRetriever,
+		baseTokenRetriever: newBaseTokenRetriever(),
 	}
 }
 
 func NewWorkloadIdentityTokenRetriever() *WorkloadIdentityTokenRetriever {
 	return &WorkloadIdentityTokenRetriever{
-		baseTokenRetriever: baseTokenRetriever,
+		baseTokenRetriever: newBaseTokenRetriever(),
 	}
 }
 
@@ -160,8 +156,7 @@ func closeResponse(resp *http.Response) {
 }
 
 // Get auth token from service account token
-func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
-	//AcquireARMTokenFromServiceAccountToken(ctx context.Context, tenantID, clientID string) (types.AccessToken, error) {
+func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(ctx context.Context, clientID, tenantID string, resourceID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	cached, ok := tr.baseTokenRetriever.cache.Load(cacheKey)
 	if ok {
@@ -178,12 +173,26 @@ func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(clientID string, resou
 		return readJWTFromFS()
 	})
 
+	authorityHost := "https://login.microsoftonline.com/"
+
 	confidentialClientApp, err := confidential.New(
 		clientID,
 		cred,
 		confidential.WithAuthority(fmt.Sprintf("%s%s/oauth2/token", authorityHost, tenantID)))
 	if err != nil {
 		return "", fmt.Errorf("unable to get new confidential client app: %w", err)
+	}
+
+	resource := os.Getenv(customARMResourceEnvVar)
+	if resource == "" {
+		resource = defaultARMResource
+	}
+
+	// trim the suffix / if exists
+	resource = strings.TrimSuffix(resource, "/")
+	// .default needs to be added to the scope
+	if !strings.HasSuffix(resource, ".default") {
+		resource += "/.default"
 	}
 
 	authResult, err := confidentialClientApp.AcquireTokenByCredential(ctx, []string{resource})

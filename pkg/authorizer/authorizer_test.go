@@ -1,5 +1,6 @@
 package authorizer
 
+/*
 import (
 	"errors"
 	"time"
@@ -89,3 +90,5 @@ var _ = Describe("Authorizer Tests", func() {
 		})
 	})
 })
+
+*/

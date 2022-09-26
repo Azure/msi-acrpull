@@ -10,11 +10,6 @@ type Interface interface {
 	AcquireACRAccessTokenWithClientID(clientID string, acrFQDN string) (types.AccessToken, error)
 }
 
-// IdentityTokenRetriever is the interface to acquire an ARM access token.
-type IdentityTokenRetriever interface {
-	AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error)
-}
-
 // ACRTokenExchanger is the interface to exchange an ACR access token.
 type ACRTokenExchanger interface {
 	ExchangeACRAccessToken(armToken types.AccessToken, acrFQDN string) (types.AccessToken, error)
