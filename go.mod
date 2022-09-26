@@ -3,6 +3,7 @@ module github.com/Azure/msi-acrpull
 go 1.13
 
 require (
+	github.com/AzureAD/microsoft-authentication-library-for-go v0.7.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-logr/logr v0.1.0
 	github.com/golang/mock v1.2.0

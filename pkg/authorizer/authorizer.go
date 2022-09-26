@@ -8,14 +8,14 @@ import (
 
 // Authorizer is an instance of authorizer
 type Authorizer struct {
-	tokenRetriever ManagedIdentityTokenRetriever
+	tokenRetriever *ManagedIdentityTokenRetriever
 	tokenExchanger ACRTokenExchanger
 }
 
 // NewAuthorizer returns an authorizer
 func NewAuthorizer() *Authorizer {
 	return &Authorizer{
-		tokenRetriever: NewTokenRetriever(),
+		tokenRetriever: NewManagedIdentityTokenRetriever(),
 		tokenExchanger: NewTokenExchanger(),
 	}
 }
