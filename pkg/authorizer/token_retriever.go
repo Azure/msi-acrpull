@@ -156,7 +156,7 @@ func closeResponse(resp *http.Response) {
 }
 
 // Get auth token from service account token
-func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(ctx context.Context, clientID, tenantID string, resourceID string) (types.AccessToken, error) {
+func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(ctx context.Context, clientID, tenantID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	cached, ok := tr.baseTokenRetriever.cache.Load(cacheKey)
 	if ok {

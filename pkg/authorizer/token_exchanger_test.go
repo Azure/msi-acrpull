@@ -1,11 +1,7 @@
 package authorizer
 
 import (
-	"net/url"
-	"time"
-
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/ghttp"
 )
 
@@ -23,66 +19,68 @@ var _ = Describe("Token Exchanger Tests", func() {
 		server.Close()
 	})
 
-	Context("Exchange ACR Access Token", func() {
-		It("Get ACR Token Successfully", func() {
-			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
-			Expect(err).ToNot(HaveOccurred())
+	/*
+		Context("Exchange ACR Access Token", func() {
+			It("Get ACR Token Successfully", func() {
+				armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
+				Expect(err).ToNot(HaveOccurred())
 
-			acrToken, err := getTestAcrToken(time.Now().Add(time.Hour).Unix(), signingKey)
-			Expect(err).ToNot(HaveOccurred())
+				acrToken, err := getTestAcrToken(time.Now().Add(time.Hour).Unix(), signingKey)
+				Expect(err).ToNot(HaveOccurred())
 
-			tokenResp := &tokenResponse{RefreshToken: string(acrToken)}
+				tokenResp := &tokenResponse{RefreshToken: string(acrToken)}
 
-			ul, err := url.Parse(server.URL())
-			Expect(err).ToNot(HaveOccurred())
+				ul, err := url.Parse(server.URL())
+				Expect(err).ToNot(HaveOccurred())
 
-			server.AppendHandlers(
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/oauth2/exchange"),
-					ghttp.VerifyContentType("application/x-www-form-urlencoded"),
-					ghttp.VerifyFormKV("tenant", testTenantID),
-					ghttp.VerifyFormKV("service", ul.Hostname()),
-					ghttp.VerifyFormKV("grant_type", "access_token"),
-					ghttp.VerifyFormKV("access_token", string(armToken)),
-					ghttp.RespondWithJSONEncoded(200, tokenResp),
-				))
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/oauth2/exchange"),
+						ghttp.VerifyContentType("application/x-www-form-urlencoded"),
+						ghttp.VerifyFormKV("tenant", testTenantID),
+						ghttp.VerifyFormKV("service", ul.Hostname()),
+						ghttp.VerifyFormKV("grant_type", "access_token"),
+						ghttp.VerifyFormKV("access_token", string(armToken)),
+						ghttp.RespondWithJSONEncoded(200, tokenResp),
+					))
 
-			te := newTestTokenExchanger()
-			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
+				te := newTestTokenExchanger()
+				token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
 
-			Expect(err).To(BeNil())
-			Expect(server.ReceivedRequests()).Should(HaveLen(1))
-			Expect(token).To(Equal(acrToken))
+				Expect(err).To(BeNil())
+				Expect(server.ReceivedRequests()).Should(HaveLen(1))
+				Expect(token).To(Equal(acrToken))
+			})
+
+			It("Returns error when ACR reject token exchange", func() {
+				armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
+				Expect(err).ToNot(HaveOccurred())
+
+				ul, err := url.Parse(server.URL())
+				Expect(err).ToNot(HaveOccurred())
+
+				server.AppendHandlers(
+					ghttp.CombineHandlers(
+						ghttp.VerifyRequest("POST", "/oauth2/exchange"),
+						ghttp.VerifyContentType("application/x-www-form-urlencoded"),
+						ghttp.VerifyFormKV("tenant", testTenantID),
+						ghttp.VerifyFormKV("service", ul.Hostname()),
+						ghttp.VerifyFormKV("grant_type", "access_token"),
+						ghttp.VerifyFormKV("access_token", string(armToken)),
+						ghttp.RespondWith(403, "Unauthorized"),
+					))
+
+				te := newTestTokenExchanger()
+				token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
+
+				Expect(err).NotTo(BeNil())
+				Expect(server.ReceivedRequests()).Should(HaveLen(1))
+				Expect(string(token)).To(Equal(""))
+
+				Expect(err.Error()).To(ContainSubstring("Unauthorized"))
+			})
 		})
-
-		It("Returns error when ACR reject token exchange", func() {
-			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
-			Expect(err).ToNot(HaveOccurred())
-
-			ul, err := url.Parse(server.URL())
-			Expect(err).ToNot(HaveOccurred())
-
-			server.AppendHandlers(
-				ghttp.CombineHandlers(
-					ghttp.VerifyRequest("POST", "/oauth2/exchange"),
-					ghttp.VerifyContentType("application/x-www-form-urlencoded"),
-					ghttp.VerifyFormKV("tenant", testTenantID),
-					ghttp.VerifyFormKV("service", ul.Hostname()),
-					ghttp.VerifyFormKV("grant_type", "access_token"),
-					ghttp.VerifyFormKV("access_token", string(armToken)),
-					ghttp.RespondWith(403, "Unauthorized"),
-				))
-
-			te := newTestTokenExchanger()
-			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
-
-			Expect(err).NotTo(BeNil())
-			Expect(server.ReceivedRequests()).Should(HaveLen(1))
-			Expect(string(token)).To(Equal(""))
-
-			Expect(err.Error()).To(ContainSubstring("Unauthorized"))
-		})
-	})
+	*/
 })
 
 func newTestTokenExchanger() *TokenExchanger {
