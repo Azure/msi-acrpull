@@ -25,28 +25,6 @@ var _ = Describe("Access Token Tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Context("GetTokenTenantID", func() {
-		It("Get Valid Tenant ID Arm Token", func() {
-			token, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
-			Expect(err).ToNot(HaveOccurred())
-
-			tenantID, err := token.GetTokenTenantId()
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(tenantID).To(Equal(testTenantID))
-		})
-
-		It("Get Valid Tenant ID ACR Token", func() {
-			token, err := getTestAcrToken(time.Now().Add(time.Hour).Unix(), signingKey)
-			Expect(err).ToNot(HaveOccurred())
-
-			tenantID, err := token.GetTokenTenantId()
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(tenantID).To(Equal(testTenantID))
-		})
-	})
-
 	Context("GetTokenExp", func() {
 		It("Retrieves Correct Exp Time from ARM Token", func() {
 			expExpected := time.Now().Add(time.Hour).Unix()

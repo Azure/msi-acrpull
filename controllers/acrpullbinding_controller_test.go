@@ -7,9 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Azure/msi-acrpull/pkg/authorizer/mock_authorizer"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -60,40 +58,42 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			Expect(err).To(BeNil())
 		})
 
-		It("Should use defaults when no parameters defined", func() {
-			mockCtrl := gomock.NewController(GinkgoT())
-			fakeAuth := mock_authorizer.NewMockInterface(mockCtrl)
+		/*
+			It("Should use defaults when no parameters defined", func() {
+				mockCtrl := gomock.NewController(GinkgoT())
+				fakeAuth := mock_authorizer.NewMockInterface(mockCtrl)
 
-			reconciler := &AcrPullBindingReconciler{
-				Client:                           fake.NewFakeClientWithScheme(scheme.Scheme),
-				Log:                              ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
-				Scheme:                           scheme.Scheme,
-				Auth:                             fakeAuth,
-				DefaultManagedIdentityResourceID: "defaultResourceID",
-				DefaultACRServer:                 "DefaultACRServer",
-			}
-			fakeAuth.EXPECT().AcquireACRAccessTokenWithResourceID(
-				gomock.Eq(reconciler.DefaultManagedIdentityResourceID),
-				gomock.Eq(reconciler.DefaultACRServer)).Times(1)
+				reconciler := &AcrPullBindingReconciler{
+					Client:                           fake.NewFakeClientWithScheme(scheme.Scheme),
+					Log:                              ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
+					Scheme:                           scheme.Scheme,
+					Auth:                             fakeAuth,
+					DefaultManagedIdentityResourceID: "defaultResourceID",
+					DefaultACRServer:                 "DefaultACRServer",
+				}
+				fakeAuth.EXPECT().AcquireACRAccessTokenWithResourceID(
+					gomock.Eq(reconciler.DefaultManagedIdentityResourceID),
+					gomock.Eq(reconciler.DefaultACRServer)).Times(1)
 
-			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test",
-					Namespace:  "default",
-					Finalizers: []string{},
-				},
-			}
-			reconciler.Create(context.TODO(), acrBinding)
+				acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:       "test",
+						Namespace:  "default",
+						Finalizers: []string{},
+					},
+				}
+				reconciler.Create(context.TODO(), acrBinding)
 
-			req := ctrl.Request{
-				NamespacedName: k8stypes.NamespacedName{
-					Namespace: "default",
-					Name:      "test",
-				},
-			}
-			reconciler.Reconcile(req)
-			mockCtrl.Finish()
-		})
+				req := ctrl.Request{
+					NamespacedName: k8stypes.NamespacedName{
+						Namespace: "default",
+						Name:      "test",
+					},
+				}
+				reconciler.Reconcile(req)
+				mockCtrl.Finish()
+			})
+		*/
 
 		It("Should return error when getting acr pull binding returns error other than NotFound", func() {
 			reconciler := &AcrPullBindingReconciler{

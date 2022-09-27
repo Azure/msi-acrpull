@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
@@ -8,34 +9,65 @@ import (
 
 // Authorizer is an instance of authorizer
 type Authorizer struct {
-	tokenRetriever *ManagedIdentityTokenRetriever
-	tokenExchanger ACRTokenExchanger
+	managedIdentityTokenRetriever  *ManagedIdentityTokenRetriever
+	workloadIdentityTokenRetriever *WorkloadIdentityTokenRetriever
+	tokenExchanger                 ACRTokenExchanger
 }
 
 // NewAuthorizer returns an authorizer
 func NewAuthorizer() *Authorizer {
 	return &Authorizer{
-		tokenRetriever: NewManagedIdentityTokenRetriever(),
-		tokenExchanger: NewTokenExchanger(),
+		managedIdentityTokenRetriever:  NewManagedIdentityTokenRetriever(),
+		workloadIdentityTokenRetriever: NewWorkloadIdentityTokenRetriever(),
+		tokenExchanger:                 NewTokenExchanger(),
 	}
 }
 
-// AcquireACRAccessTokenWithResourceID acquires ACR access token using managed identity resource ID (/subscriptions/{id}/resourceGroups/{group}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}).
-func (az *Authorizer) AcquireACRAccessTokenWithResourceID(identityResourceID string, acrFQDN string) (types.AccessToken, error) {
-	armToken, err := az.tokenRetriever.AcquireARMToken("", identityResourceID)
+func (az *Authorizer) AcquireACRAccessTokenWithManagedIdentity(clientID string, identityResourceID string, acrFQDN string) (types.AccessToken, error) {
+	var armToken types.AccessToken
+	var err error
+
+	if clientID != "" {
+		armToken, err = az.managedIdentityTokenRetriever.AcquireARMToken(clientID, "")
+	} else {
+		armToken, err = az.managedIdentityTokenRetriever.AcquireARMToken("", identityResourceID)
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("failed to get ARM access token: %w", err)
 	}
 
-	return az.tokenExchanger.ExchangeACRAccessToken(armToken, acrFQDN)
+	tenantID, err := getTokenTenantId(armToken)
+	if err != nil {
+		return "", fmt.Errorf("failed to get tenant ID: %w", err)
+	}
+
+	return az.tokenExchanger.ExchangeACRAccessToken(armToken, tenantID, acrFQDN)
 }
 
-// AcquireACRAccessTokenWithClientID acquires ACR access token using managed identity client ID.
-func (az *Authorizer) AcquireACRAccessTokenWithClientID(clientID string, acrFQDN string) (types.AccessToken, error) {
-	armToken, err := az.tokenRetriever.AcquireARMToken(clientID, "")
+func (az *Authorizer) AcquireACRAccessTokenWithWorkloadIdentity(ctx context.Context, clientID string, tenantID string, acrFQDN string) (types.AccessToken, error) {
+	armToken, err := az.workloadIdentityTokenRetriever.AcquireARMToken(ctx, clientID, tenantID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get ARM access token: %w", err)
 	}
 
-	return az.tokenExchanger.ExchangeACRAccessToken(armToken, acrFQDN)
+	return az.tokenExchanger.ExchangeACRAccessToken(armToken, tenantID, acrFQDN)
+}
+
+func getTokenTenantId(t types.AccessToken) (string, error) {
+	claims, err := t.GetTokenClaims()
+	if err != nil {
+		return "", err
+	}
+	tenantID, ok := claims["tid"].(string)
+	if ok {
+		return tenantID, nil
+	}
+
+	tenantID, ok = claims["tenant"].(string)
+	if ok {
+		return tenantID, nil
+	}
+
+	return "", fmt.Errorf("token has no tenant ID")
 }
