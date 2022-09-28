@@ -51,7 +51,7 @@ type AcrPullBindingSpec struct {
 	// +optional
 	ManagedIdentityClientID string `json:"managedIdentityClientID"`
 
-	// The Managed Identity resource ID that is used to authenticate with ACR (if Managed Identity Clien ssID is specified, this is ignored)
+	// The Managed Identity resource ID that is used to authenticate with ACR (if Managed Identity ClientID is specified, this is ignored)
 	// +optional
 	ManagedIdentityResourceID string `json:"managedIdentityResourceID"`
 

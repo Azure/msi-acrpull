@@ -46,7 +46,7 @@ spec:
               type: string
             managedIdentityResourceID:
               description: The Managed Identity resource ID that is used to authenticate
-                with ACR (if Managed Identity Clien ssID is specified, this is ignored)
+                with ACR (if Managed Identity ClientID is specified, this is ignored)
               type: string
             serviceAccountName:
               description: The Service Account to associate the image pull secret
