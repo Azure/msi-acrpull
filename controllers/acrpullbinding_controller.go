@@ -80,9 +80,18 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, nil
 	}
 
-	msiClientID, msiResourceID, acrServer := specOrDefault(r, acrBinding.Spec)
+	acrServer := getACRServer(r, acrBinding.Spec)
+	var acrAccessToken types.AccessToken
+	var err error
 
-	acrAccessToken, err := r.Auth.AcquireACRAccessTokenWithManagedIdentity(msiClientID, msiResourceID, acrServer)
+	if acrBinding.Spec.WorkloadIdentityClientID != "" {
+		clientID := acrBinding.Spec.WorkloadIdentityClientID
+		tenantID := acrBinding.Spec.WorkloadIdentityTenantID
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithWorkloadIdentity(ctx, clientID, tenantID, acrServer)
+	} else {
+		msiClientID, msiResourceID := specOrDefault(r, acrBinding.Spec)
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithManagedIdentity(msiClientID, msiResourceID, acrServer)
+	}
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
 		if err := r.setErrStatus(ctx, err, &acrBinding); err != nil {
@@ -140,20 +149,26 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}, nil
 }
 
-func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) (string, string, string) {
+func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) (string, string) {
 	msiClientID := spec.ManagedIdentityClientID
 	msiResourceID := path.Clean(spec.ManagedIdentityResourceID)
-	acrServer := spec.AcrServer
 	if msiClientID == "" {
 		msiClientID = r.DefaultManagedIdentityClientID
 	}
 	if msiResourceID == "." {
 		msiResourceID = r.DefaultManagedIdentityResourceID
 	}
+
+	return msiClientID, msiResourceID
+}
+
+func getACRServer(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) string {
+	acrServer := spec.AcrServer
 	if acrServer == "" {
 		acrServer = r.DefaultACRServer
 	}
-	return msiClientID, msiResourceID, acrServer
+
+	return acrServer
 }
 
 func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {

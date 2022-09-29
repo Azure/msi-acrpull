@@ -5,6 +5,12 @@ metadata:
     control-plane: controller-manager
   name: msi-acrpull-system
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: msi-acrpull-controller-manager
+  namespace: msi-acrpull-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -183,6 +189,16 @@ spec:
     spec:
       containers:
       - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream=http://127.0.0.1:8080/
+        - --logtostderr=true
+        - --v=10
+        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+      - args:
         - --metrics-addr=127.0.0.1:8080
         - --enable-leader-election
         command:
@@ -196,14 +212,16 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
-      - args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://127.0.0.1:8080/
-        - --logtostderr=true
-        - --v=10
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
-        name: kube-rbac-proxy
-        ports:
-        - containerPort: 8443
-          name: https
+        volumeMounts:
+        - mountPath: /var/run/secrets/token
+          name: token-vol
+      serviceAccountName: msi-acrpull-controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - name: token-vol
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: api://AzureADTokenExchange
+              expirationSeconds: 660
+              path: saToken

@@ -352,7 +352,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			spec := msiacrpullv1beta1.AcrPullBindingSpec{
 				ManagedIdentityResourceID: "/resourcegroup//doubleslash/singleslash/",
 			}
-			_, msiResourceId, _ := specOrDefault(reconciler, spec)
+			_, msiResourceId := specOrDefault(reconciler, spec)
 			Expect(msiResourceId).To(Equal("/resourcegroup/doubleslash/singleslash"))
 		})
 	})

@@ -20,10 +20,14 @@ spec:
       description: AcrPullBinding is the Schema for the acrpullbindings API
       properties:
         apiVersion:
-          description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
           type: string
         kind:
-          description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
           type: string
         metadata:
           type: object
@@ -35,13 +39,25 @@ spec:
               minLength: 0
               type: string
             managedIdentityClientID:
-              description: The Managed Identity client ID that is used to authenticate with ACR (specify one of ClientID or ResourceID)
+              description: The Managed Identity client ID that is used to authenticate
+                with ACR
               type: string
             managedIdentityResourceID:
-              description: The Managed Identity resource ID that is used to authenticate with ACR (if ClientID is specified, this is ignored)
+              description: The Managed Identity resource ID that is used to authenticate
+                with ACR (if Managed Identity ClientID is specified, this is ignored)
               type: string
             serviceAccountName:
-              description: The Service Account to associate the image pull secret with. If this is not specified, the default Service Account of the namespace will be used.
+              description: The Service Account to associate the image pull secret
+                with. If this is not specified, the default Service Account of the
+                namespace will be used.
+              type: string
+            workloadIdentityClientID:
+              description: The Workload Identity client ID that is used to authenticate
+                with ACR. Workload identity is used if this is specified
+              type: string
+            workloadIdentityTenantID:
+              description: The Workload Identity tenant ID. Must be specifiied with
+                ClientID
               type: string
           required:
           - acrServer
