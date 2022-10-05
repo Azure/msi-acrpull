@@ -9,8 +9,8 @@ import (
 
 // Authorizer is an instance of authorizer
 type Authorizer struct {
-	managedIdentityTokenRetriever  *ManagedIdentityTokenRetriever
-	workloadIdentityTokenRetriever *WorkloadIdentityTokenRetriever
+	managedIdentityTokenRetriever  MIARMTokenRetriever
+	workloadIdentityTokenRetriever WIARMTokenRetriever
 	tokenExchanger                 ACRTokenExchanger
 }
 
@@ -28,9 +28,9 @@ func (az *Authorizer) AcquireACRAccessTokenWithManagedIdentity(clientID string, 
 	var err error
 
 	if clientID != "" {
-		armToken, err = az.managedIdentityTokenRetriever.AcquireARMToken(clientID, "")
+		armToken, err = az.managedIdentityTokenRetriever.MIAcquireARMToken(clientID, "")
 	} else {
-		armToken, err = az.managedIdentityTokenRetriever.AcquireARMToken("", identityResourceID)
+		armToken, err = az.managedIdentityTokenRetriever.MIAcquireARMToken("", identityResourceID)
 	}
 
 	if err != nil {
@@ -46,7 +46,7 @@ func (az *Authorizer) AcquireACRAccessTokenWithManagedIdentity(clientID string, 
 }
 
 func (az *Authorizer) AcquireACRAccessTokenWithWorkloadIdentity(ctx context.Context, clientID string, tenantID string, acrFQDN string) (types.AccessToken, error) {
-	armToken, err := az.workloadIdentityTokenRetriever.AcquireARMToken(ctx, clientID, tenantID)
+	armToken, err := az.workloadIdentityTokenRetriever.WIAcquireARMToken(ctx, clientID, tenantID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get ARM access token: %w", err)
 	}

@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -38,7 +39,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken("", testResourceID)
+			token, err := tr.MIAcquireARMToken("", testResourceID)
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -60,7 +61,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken("", testResourceID)
+			token, err := tr.MIAcquireARMToken("", testResourceID)
 
 			os.Unsetenv(customARMResourceEnvVar)
 
@@ -82,7 +83,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.MIAcquireARMToken(testClientID, "")
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -97,7 +98,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.MIAcquireARMToken(testClientID, "")
 
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("404"))
@@ -118,12 +119,12 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.MIAcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken(testClientID, "")
+			token, err = tr.MIAcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -142,12 +143,12 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
-			token, err := tr.AcquireARMToken("", testResourceID)
+			token, err := tr.MIAcquireARMToken("", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken("", testResourceID)
+			token, err = tr.MIAcquireARMToken("", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -171,19 +172,35 @@ var _ = Describe("Token Retriever Tests", func() {
 
 			// set cache expire immediately
 			tr := newTestTokenRetriever(server.URL(), 0)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.MIAcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken(testClientID, "")
+			token, err = tr.MIAcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(2))
+		})
+
+		It("Get ARM Token with Client ID for workload identity Successfully", func() {
+			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
+			Expect(err).ToNot(HaveOccurred())
+
+			tr := newTestWorkloadIdentityTokenRetriever(defaultCacheExpirationInSeconds)
+			ctx := context.Background()
+			token, err := tr.WIAcquireARMToken(ctx, testClientID, testTenantID)
+
+			Expect(err).To(BeNil())
+			Expect(token).To(Equal(armToken))
 		})
 	})
 })
 
 func newTestTokenRetriever(metadataEndpoint string, cacheExpirationInMilliSeconds int) *ManagedIdentityTokenRetriever {
 	return NewManagedIdentityTokenRetriever()
+}
+
+func newTestWorkloadIdentityTokenRetriever(cacheExpirationInMilliSeconds int) *WorkloadIdentityTokenRetriever {
+	return NewWorkloadIdentityTokenRetriever()
 }
