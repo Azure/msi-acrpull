@@ -24,7 +24,7 @@ var _ = Describe("Authorizer Tests", func() {
 	})
 
 	Context("Acquire ACR Access Token", func() {
-		It("Get ACR Token with Resource ID via Managed Identity Successfully", func() {
+		It("Get ACR Token via workload identity with Resource ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -48,7 +48,7 @@ var _ = Describe("Authorizer Tests", func() {
 			Expect(t).To(Equal(acrToken))
 		})
 
-		It("Get ACR Token with Client ID via Managed Identity Successfully", func() {
+		It("Get ACR Token via workload identity with Client ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -72,7 +72,7 @@ var _ = Describe("Authorizer Tests", func() {
 			Expect(t).To(Equal(acrToken))
 		})
 
-		It("Returns Error when ARM Token Retrieve Failed", func() {
+		It("Returns Error when ARM Token Retrieve via Managed Identity Failed", func() {
 			mitr := mock_authorizer.NewMockManagedIdentityARMTokenRetriever(mockCtrl)
 			te := mock_authorizer.NewMockACRTokenExchanger(mockCtrl)
 
@@ -89,7 +89,7 @@ var _ = Describe("Authorizer Tests", func() {
 			Expect(err.Error()).To(ContainSubstring("test error"))
 		})
 
-		It("Get ACR Token with Client ID via Workload Identity Successfully", func() {
+		It("Get ACR Token via workload identity with Client ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 

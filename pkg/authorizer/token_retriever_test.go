@@ -26,7 +26,7 @@ var _ = Describe("Token Retriever Tests", func() {
 	})
 
 	Context("Retrieve ARM Token", func() {
-		It("Get ARM Token with Resource ID Successfully", func() {
+		It("Get ARM Token via Managed Identity with Resource ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -46,7 +46,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(token).To(Equal(armToken))
 		})
 
-		It("Get ARM Token Against Custom ARM Resource Successfully", func() {
+		It("Get ARM Token via Managed Identity Against Custom ARM Resource Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -70,7 +70,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(token).To(Equal(armToken))
 		})
 
-		It("Get ARM Token with Client ID Successfully", func() {
+		It("Get ARM Token via Managed Identity with Client ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -106,7 +106,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(string(token)).To(Equal(""))
 		})
 
-		It("Get ARM Token with cache using client ID", func() {
+		It("Get ARM Token via Managed Identity with cache using client ID", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -130,7 +130,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 		})
 
-		It("Get ARM Token with cache using resource ID", func() {
+		It("Get ARM Token via Managed Identity with cache using resource ID", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -154,7 +154,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 		})
 
-		It("Refresh ARM Token if cache expired", func() {
+		It("Refresh ARM Token if cache expired via managed identity", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -183,7 +183,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(server.ReceivedRequests()).Should(HaveLen(2))
 		})
 
-		It("Get ARM Token with Client ID for workload identity Successfully", func() {
+		It("Get ARM Token via workload identity with Client ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
