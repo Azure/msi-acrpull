@@ -64,8 +64,8 @@ func NewWorkloadIdentityTokenRetriever() *WorkloadIdentityTokenRetriever {
 	}
 }
 
-// AcquireARMToken acquires the managed identity ARM access token
-func (tr *ManagedIdentityTokenRetriever) MIAcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
+// AcquireARMToken acquires the ARM access token via managed identity
+func (tr *ManagedIdentityTokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	if cacheKey == "" {
 		cacheKey = strings.ToLower(resourceID)
@@ -155,8 +155,8 @@ func closeResponse(resp *http.Response) {
 	resp.Body.Close()
 }
 
-// Get auth token from service account token
-func (tr *WorkloadIdentityTokenRetriever) WIAcquireARMToken(ctx context.Context, clientID, tenantID string) (types.AccessToken, error) {
+// AcquireARMToken acquires the ARM access token via workload identity
+func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(ctx context.Context, clientID, tenantID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	cached, ok := tr.baseTokenRetriever.cache.Load(cacheKey)
 	if ok {
