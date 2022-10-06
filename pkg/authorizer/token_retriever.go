@@ -64,7 +64,7 @@ func NewWorkloadIdentityTokenRetriever() *WorkloadIdentityTokenRetriever {
 	}
 }
 
-// AcquireARMToken acquires the managed identity ARM access token
+// AcquireARMToken acquires the ARM access token via managed identity
 func (tr *ManagedIdentityTokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	if cacheKey == "" {
@@ -131,7 +131,7 @@ func (tr *ManagedIdentityTokenRetriever) refreshToken(clientID, resourceID strin
 
 	if resp.StatusCode != 200 {
 		responseBytes, _ := ioutil.ReadAll(resp.Body)
-		return "", fmt.Errorf("Metadata endpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
+		return "", fmt.Errorf("metadata endpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
 	}
 
 	responseBytes, err := ioutil.ReadAll(resp.Body)
@@ -155,7 +155,7 @@ func closeResponse(resp *http.Response) {
 	resp.Body.Close()
 }
 
-// Get auth token from service account token
+// AcquireARMToken acquires the ARM access token via workload identity
 func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(ctx context.Context, clientID, tenantID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	cached, ok := tr.baseTokenRetriever.cache.Load(cacheKey)

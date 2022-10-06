@@ -9,8 +9,8 @@ import (
 
 // Authorizer is an instance of authorizer
 type Authorizer struct {
-	managedIdentityTokenRetriever  *ManagedIdentityTokenRetriever
-	workloadIdentityTokenRetriever *WorkloadIdentityTokenRetriever
+	managedIdentityTokenRetriever  ManagedIdentityARMTokenRetriever
+	workloadIdentityTokenRetriever WorkloadIdentityARMTokenRetriever
 	tokenExchanger                 ACRTokenExchanger
 }
 

@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -25,7 +26,7 @@ var _ = Describe("Token Retriever Tests", func() {
 	})
 
 	Context("Retrieve ARM Token", func() {
-		It("Get ARM Token with Resource ID Successfully", func() {
+		It("Get ARM Token via Managed Identity with Resource ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -37,7 +38,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestManagedIdentityTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken("", testResourceID)
 
 			Expect(err).To(BeNil())
@@ -45,7 +46,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(token).To(Equal(armToken))
 		})
 
-		It("Get ARM Token Against Custom ARM Resource Successfully", func() {
+		It("Get ARM Token via Managed Identity Against Custom ARM Resource Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -59,7 +60,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestManagedIdentityTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken("", testResourceID)
 
 			os.Unsetenv(customARMResourceEnvVar)
@@ -69,7 +70,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(token).To(Equal(armToken))
 		})
 
-		It("Get ARM Token with Client ID Successfully", func() {
+		It("Get ARM Token via Managed Identity with Client ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -81,7 +82,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestManagedIdentityTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken(testClientID, "")
 
 			Expect(err).To(BeNil())
@@ -96,7 +97,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWith(404, ""),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestManagedIdentityTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken(testClientID, "")
 
 			Expect(err).NotTo(BeNil())
@@ -105,7 +106,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(string(token)).To(Equal(""))
 		})
 
-		It("Get ARM Token with cache using client ID", func() {
+		It("Get ARM Token via Managed Identity with cache using client ID", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -117,7 +118,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
+			tr := newTestManagedIdentityTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
 			token, err := tr.AcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
@@ -129,7 +130,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 		})
 
-		It("Get ARM Token with cache using resource ID", func() {
+		It("Get ARM Token via Managed Identity with cache using resource ID", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -141,7 +142,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
+			tr := newTestManagedIdentityTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
 			token, err := tr.AcquireARMToken("", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
@@ -153,7 +154,7 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 		})
 
-		It("Refresh ARM Token if cache expired", func() {
+		It("Refresh ARM Token if cache expired via managed identity", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -170,7 +171,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			// set cache expire immediately
-			tr := newTestTokenRetriever(server.URL(), 0)
+			tr := newTestManagedIdentityTokenRetriever(server.URL(), 0)
 			token, err := tr.AcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
@@ -181,9 +182,25 @@ var _ = Describe("Token Retriever Tests", func() {
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(2))
 		})
+
+		It("Get ARM Token via workload identity with Client ID Successfully", func() {
+			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
+			Expect(err).ToNot(HaveOccurred())
+
+			tr := newTestWorkloadIdentityTokenRetriever(defaultCacheExpirationInSeconds)
+			ctx := context.Background()
+			token, err := tr.AcquireARMToken(ctx, testClientID, testTenantID)
+
+			Expect(err).To(BeNil())
+			Expect(token).To(Equal(armToken))
+		})
 	})
 })
 
-func newTestTokenRetriever(metadataEndpoint string, cacheExpirationInMilliSeconds int) *ManagedIdentityTokenRetriever {
+func newTestManagedIdentityTokenRetriever(metadataEndpoint string, cacheExpirationInMilliSeconds int) *ManagedIdentityTokenRetriever {
 	return NewManagedIdentityTokenRetriever()
+}
+
+func newTestWorkloadIdentityTokenRetriever(cacheExpirationInMilliSeconds int) *WorkloadIdentityTokenRetriever {
+	return NewWorkloadIdentityTokenRetriever()
 }

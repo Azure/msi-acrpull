@@ -1,7 +1,7 @@
 package authorizer
 
-/*
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -23,72 +23,95 @@ var _ = Describe("Authorizer Tests", func() {
 		mockCtrl = gomock.NewController(GinkgoT())
 	})
 
-	Context("Acquire ACR Access Token With ResourceID", func() {
-		It("Get ACR Token with Resource ID Successfully", func() {
+	Context("Acquire ACR Access Token", func() {
+		It("Get ACR Token via workload identity with Resource ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
 			acrToken, err := getTestAcrToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
-			tr := mock_authorizer.NewMockManagedIdentityTokenRetriever(mockCtrl)
+			mitr := mock_authorizer.NewMockManagedIdentityARMTokenRetriever(mockCtrl)
 			te := mock_authorizer.NewMockACRTokenExchanger(mockCtrl)
 
 			az := &Authorizer{
-				tokenRetriever: tr,
-				tokenExchanger: te,
+				managedIdentityTokenRetriever: mitr,
+				tokenExchanger:                te,
 			}
 
-			tr.EXPECT().AcquireARMToken("", testResourceID).Return(armToken, nil).Times(1)
-			te.EXPECT().ExchangeACRAccessToken(armToken, testACR).Return(acrToken, nil).Times(1)
+			mitr.EXPECT().AcquireARMToken("", testResourceID).Return(armToken, nil).Times(1)
+			te.EXPECT().ExchangeACRAccessToken(armToken, testTenantID, testACR).Return(acrToken, nil).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithResourceID(testResourceID, testACR)
+			t, err := az.AcquireACRAccessTokenWithManagedIdentity("", testResourceID, testACR)
 			Expect(err).To(BeNil())
 			Expect(t).NotTo(BeNil())
 			Expect(t).To(Equal(acrToken))
 		})
 
-		It("Get ACR Token with Client ID Successfully", func() {
+		It("Get ACR Token via workload identity with Client ID Successfully", func() {
 			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
 			acrToken, err := getTestAcrToken(time.Now().Add(time.Hour).Unix(), signingKey)
 			Expect(err).ToNot(HaveOccurred())
 
-			tr := mock_authorizer.NewMockManagedIdentityTokenRetriever(mockCtrl)
+			mitr := mock_authorizer.NewMockManagedIdentityARMTokenRetriever(mockCtrl)
 			te := mock_authorizer.NewMockACRTokenExchanger(mockCtrl)
 
 			az := &Authorizer{
-				tokenRetriever: tr,
-				tokenExchanger: te,
+				managedIdentityTokenRetriever: mitr,
+				tokenExchanger:                te,
 			}
 
-			tr.EXPECT().AcquireARMToken(testClientID, "").Return(armToken, nil).Times(1)
-			te.EXPECT().ExchangeACRAccessToken(armToken, testACR).Return(acrToken, nil).Times(1)
+			mitr.EXPECT().AcquireARMToken(testClientID, "").Return(armToken, nil).Times(1)
+			te.EXPECT().ExchangeACRAccessToken(armToken, testTenantID, testACR).Return(acrToken, nil).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithClientID(testClientID, testACR)
+			t, err := az.AcquireACRAccessTokenWithManagedIdentity(testClientID, "", testACR)
 			Expect(err).To(BeNil())
 			Expect(t).NotTo(BeNil())
 			Expect(t).To(Equal(acrToken))
 		})
 
-		It("Returns Error when ARM Token Retrieve Failed", func() {
-			tr := mock_authorizer.NewMockManagedIdentityTokenRetriever(mockCtrl)
+		It("Returns Error when ARM Token Retrieve via Managed Identity Failed", func() {
+			mitr := mock_authorizer.NewMockManagedIdentityARMTokenRetriever(mockCtrl)
 			te := mock_authorizer.NewMockACRTokenExchanger(mockCtrl)
 
 			az := &Authorizer{
-				tokenRetriever: tr,
-				tokenExchanger: te,
+				managedIdentityTokenRetriever: mitr,
+				tokenExchanger:                te,
 			}
 
-			tr.EXPECT().AcquireARMToken(testClientID, "").Return(types.AccessToken(""), errors.New("test error")).Times(1)
+			mitr.EXPECT().AcquireARMToken(testClientID, "").Return(types.AccessToken(""), errors.New("test error")).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithClientID(testClientID, testACR)
+			t, err := az.AcquireACRAccessTokenWithManagedIdentity(testClientID, "", testACR)
 			Expect(string(t)).To(Equal(""))
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("test error"))
 		})
+
+		It("Get ACR Token via workload identity with Client ID Successfully", func() {
+			armToken, err := getTestArmToken(time.Now().Add(time.Hour).Unix(), signingKey)
+			Expect(err).ToNot(HaveOccurred())
+
+			acrToken, err := getTestAcrToken(time.Now().Add(time.Hour).Unix(), signingKey)
+			Expect(err).ToNot(HaveOccurred())
+
+			witr := mock_authorizer.NewMockWorkloadIdentityARMTokenRetriever(mockCtrl)
+			te := mock_authorizer.NewMockACRTokenExchanger(mockCtrl)
+
+			az := &Authorizer{
+				workloadIdentityTokenRetriever: witr,
+				tokenExchanger:                 te,
+			}
+
+			ctx := context.Background()
+			witr.EXPECT().AcquireARMToken(ctx, testClientID, testTenantID).Return(armToken, nil).Times(1)
+			te.EXPECT().ExchangeACRAccessToken(armToken, testTenantID, testACR).Return(acrToken, nil).Times(1)
+
+			t, err := az.AcquireACRAccessTokenWithWorkloadIdentity(ctx, testClientID, testTenantID, testACR)
+			Expect(err).To(BeNil())
+			Expect(t).NotTo(BeNil())
+			Expect(t).To(Equal(acrToken))
+		})
 	})
 })
-
-*/

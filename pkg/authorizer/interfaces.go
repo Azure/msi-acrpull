@@ -18,3 +18,13 @@ type Interface interface {
 type ACRTokenExchanger interface {
 	ExchangeACRAccessToken(armToken types.AccessToken, tenantID, acrFQDN string) (types.AccessToken, error)
 }
+
+// ManagedIdentityARMTokenRetriever is the interface to retrieve an ARM access token via managed identity.
+type ManagedIdentityARMTokenRetriever interface {
+	AcquireARMToken(clientID, resourceID string) (types.AccessToken, error)
+}
+
+// WorkloadIdentityARMTokenRetriever is the interface to retrieve an ARM access token via workload identity.
+type WorkloadIdentityARMTokenRetriever interface {
+	AcquireARMToken(ctx context.Context, clientID, tenantID string) (types.AccessToken, error)
+}
