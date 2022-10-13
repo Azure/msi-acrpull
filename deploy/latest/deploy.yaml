@@ -5,6 +5,12 @@ metadata:
     control-plane: controller-manager
   name: msi-acrpull-system
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: msi-acrpull-controller-manager
+  namespace: msi-acrpull-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -99,10 +105,11 @@ rules:
   verbs:
   - create
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1beta2
 kind: ClusterRole
 metadata:
   name: msi-acrpull-metrics-reader
+  namespace: msi-acrpull-system
 rules:
 - nonResourceURLs:
   - /metrics
@@ -120,7 +127,7 @@ roleRef:
   name: msi-acrpull-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: msi-acrpull-controller-manager
   namespace: msi-acrpull-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -133,7 +140,7 @@ roleRef:
   name: msi-acrpull-manager-role
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: msi-acrpull-controller-manager
   namespace: msi-acrpull-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -146,7 +153,7 @@ roleRef:
   name: msi-acrpull-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: default
+  name: msi-acrpull-controller-manager
   namespace: msi-acrpull-system
 ---
 apiVersion: v1
@@ -183,20 +190,6 @@ spec:
     spec:
       containers:
       - args:
-        - --metrics-addr=127.0.0.1:8080
-        - --enable-leader-election
-        command:
-        - /manager
-        image: mcr.microsoft.com/aks/msi-acrpull:v0.1.0-alpha
-        name: manager
-        resources:
-          limits:
-            cpu: 100m
-            memory: 100Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
-      - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
         - --logtostderr=true
@@ -206,4 +199,30 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+      - args:
+        - --metrics-addr=127.0.0.1:8080
+        - --enable-leader-election
+        command:
+        - /manager
+        image: controllerreg.azurecr.io/aks/msi-acrpull:v0.2.0-alpha
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        volumeMounts:
+        - mountPath: /var/run/secrets/token
+          name: token-vol
+      serviceAccountName: msi-acrpull-controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - name: token-vol
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: api://AzureADTokenExchange
+              expirationSeconds: 660
+              path: saToken

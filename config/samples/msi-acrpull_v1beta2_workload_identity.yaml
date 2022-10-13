@@ -1,0 +1,9 @@
+apiVersion: msi-acrpull.microsoft.com/v1beta2
+kind: AcrPullBinding
+metadata:
+  name: test
+spec:
+  workloadIdentityClientID: "clientID"
+  workloadIdentityTenantID: "tenantID"
+  acrServer: "test.azurecr.io"
+

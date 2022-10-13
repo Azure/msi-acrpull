@@ -28,6 +28,9 @@ spec:
         args:
         - --enable-leader-election
         image: controller:latest
+        volumeMounts:
+        - name: token-vol
+          mountPath: /var/run/secrets/token
         name: manager
         resources:
           limits:
@@ -36,4 +39,13 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+      serviceAccountName: controller-manager
+      volumes:
+      - name: token-vol
+        projected:
+          sources:
+          - serviceAccountToken:
+             path: saToken
+             expirationSeconds: 660
+             audience: "api://AzureADTokenExchange"
       terminationGracePeriodSeconds: 10

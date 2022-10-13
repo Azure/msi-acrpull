@@ -48,7 +48,7 @@ var _ = Describe("Token Exchanger Tests", func() {
 				))
 
 			te := newTestTokenExchanger()
-			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
+			token, err := te.ExchangeACRAccessToken(armToken, testTenantID, ul.Host)
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -74,7 +74,7 @@ var _ = Describe("Token Exchanger Tests", func() {
 				))
 
 			te := newTestTokenExchanger()
-			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
+			token, err := te.ExchangeACRAccessToken(armToken, testTenantID, ul.Host)
 
 			Expect(err).NotTo(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -83,6 +83,7 @@ var _ = Describe("Token Exchanger Tests", func() {
 			Expect(err.Error()).To(ContainSubstring("Unauthorized"))
 		})
 	})
+
 })
 
 func newTestTokenExchanger() *TokenExchanger {

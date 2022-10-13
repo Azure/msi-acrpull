@@ -22,7 +22,7 @@
    SOFTWARE
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,11 +38,20 @@ type AcrPullBindingSpec struct {
 	// The full server name for the ACR. For example, test.azurecr.io
 	AcrServer string `json:"acrServer"`
 
-	// The Managed Identity client ID that is used to authenticate with ACR (specify one of ClientID or ResourceID)
+	// The Workload Identity client ID that is used to authenticate with ACR.
+	// Workload identity is used if this is specified
+	// +optional
+	WorkloadIdentityClientID string `json:"workloadIdentityClientID"`
+
+	// The Workload Identity tenant ID. Must be specifiied with ClientID
+	// +optional
+	WorkloadIdentityTenantID string `json:"workloadIdentityTenantID"`
+
+	// The Managed Identity client ID that is used to authenticate with ACR
 	// +optional
 	ManagedIdentityClientID string `json:"managedIdentityClientID"`
 
-	// The Managed Identity resource ID that is used to authenticate with ACR (if ClientID is specified, this is ignored)
+	// The Managed Identity resource ID that is used to authenticate with ACR (if Managed Identity ClientID is specified, this is ignored)
 	// +optional
 	ManagedIdentityResourceID string `json:"managedIdentityResourceID"`
 

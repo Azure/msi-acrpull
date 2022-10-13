@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= mcr.microsoft.com/aks/msi-acrpull:v0.1.0-alpha
+IMG ?= controllerreg.azurecr.io/aks/msi-acrpull:v0.2.0-alpha
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
