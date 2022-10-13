@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
+	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
@@ -39,7 +39,7 @@ func (e *errorFakeCtrlRuntimeClient) Get(ctx context.Context, key client.ObjectK
 		errors.New("test error"))
 }
 
-var _ = msiacrpullv1beta1.AddToScheme(scheme.Scheme)
+var _ = msiacrpullv1beta2.AddToScheme(scheme.Scheme)
 
 var _ = Describe("AcrPullBinding Controller Tests", func() {
 	Context("Reconcile", func() {
@@ -75,7 +75,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					gomock.Eq(reconciler.DefaultManagedIdentityResourceID),
 					gomock.Eq(reconciler.DefaultACRServer)).Times(1)
 
-				acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+				acrBinding := &msiacrpullv1beta2.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "test",
 						Namespace:  "default",
@@ -146,7 +146,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 
 	Context("addFinalizer", func() {
 		It("Should add finalizer to acr pull binding", func() {
-			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+			acrBinding := &msiacrpullv1beta2.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "default",
@@ -170,7 +170,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 	Context("removeFinalizer", func() {
 		It("Should remove finalizer from acr pull binding", func() {
 			serviceAccountName := "sa1"
-			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+			acrBinding := &msiacrpullv1beta2.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
 					Namespace: "default",
@@ -204,7 +204,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 
 		It("Should remove finalizer from acr pull binding when service account doesn't exist", func() {
 			serviceAccountName := "sa1"
-			acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+			acrBinding := &msiacrpullv1beta2.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
 					Namespace: "default",
@@ -244,7 +244,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 
 			for _, testCase := range testCases {
 				serviceAccountName := testCase.serviceAccountName
-				acrBinding := &msiacrpullv1beta1.AcrPullBinding{
+				acrBinding := &msiacrpullv1beta2.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test",
 						Namespace: "default",
@@ -349,7 +349,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 	Context("specOrDefaultTest", func() {
 		It("should deduplicate double slash", func() {
 			reconciler := &AcrPullBindingReconciler{}
-			spec := msiacrpullv1beta1.AcrPullBindingSpec{
+			spec := msiacrpullv1beta2.AcrPullBindingSpec{
 				ManagedIdentityResourceID: "/resourcegroup//doubleslash/singleslash/",
 			}
 			_, msiResourceId := specOrDefault(reconciler, spec)

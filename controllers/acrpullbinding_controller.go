@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
+	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
@@ -51,7 +51,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	ctx := context.Background()
 	log := r.Log.WithValues("acrpullbinding", req.NamespacedName)
 
-	var acrBinding msiacrpullv1beta1.AcrPullBinding
+	var acrBinding msiacrpullv1beta2.AcrPullBinding
 	if err := r.Get(ctx, req.NamespacedName, &acrBinding); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "unable to fetch acrPullBinding.")
@@ -149,7 +149,7 @@ func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}, nil
 }
 
-func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) (string, string) {
+func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta2.AcrPullBindingSpec) (string, string) {
 	msiClientID := spec.ManagedIdentityClientID
 	msiResourceID := path.Clean(spec.ManagedIdentityResourceID)
 	if msiClientID == "" {
@@ -162,7 +162,7 @@ func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBi
 	return msiClientID, msiResourceID
 }
 
-func getACRServer(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) string {
+func getACRServer(r *AcrPullBindingReconciler, spec msiacrpullv1beta2.AcrPullBindingSpec) string {
 	acrServer := spec.AcrServer
 	if acrServer == "" {
 		acrServer = r.DefaultACRServer
@@ -179,7 +179,7 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 
-		if owner.APIVersion != msiacrpullv1beta1.GroupVersion.String() || owner.Kind != "AcrPullBinding" {
+		if owner.APIVersion != msiacrpullv1beta2.GroupVersion.String() || owner.Kind != "AcrPullBinding" {
 			return nil
 		}
 
@@ -189,13 +189,13 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&msiacrpullv1beta1.AcrPullBinding{}).
+		For(&msiacrpullv1beta2.AcrPullBinding{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}). // Needed to not enter reconcile loop on status update
 		Owns(&v1.Secret{}).
 		Complete(r)
 }
 
-func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, log logr.Logger) error {
+func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta2.AcrPullBinding, log logr.Logger) error {
 	if !containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
 		acrBinding.ObjectMeta.Finalizers = append(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
 		if err := r.Update(ctx, acrBinding); err != nil {
@@ -206,7 +206,7 @@ func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding 
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding,
+func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta2.AcrPullBinding,
 	req ctrl.Request, serviceAccountName string, log logr.Logger) error {
 	if containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
 		// our finalizer is present, so need to clean up ImagePullSecret reference
@@ -240,7 +240,7 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding,
+func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acrBinding *msiacrpullv1beta2.AcrPullBinding,
 	req ctrl.Request, serviceAccountName string, log logr.Logger) error {
 	var serviceAccount v1.ServiceAccount
 	saNamespacedName := k8stypes.NamespacedName{
@@ -263,13 +263,13 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken types.AccessToken) error {
+func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta2.AcrPullBinding, accessToken types.AccessToken) error {
 	tokenExp, err := accessToken.GetTokenExp()
 	if err != nil {
 		return err
 	}
 
-	acrBinding.Status = msiacrpullv1beta1.AcrPullBindingStatus{
+	acrBinding.Status = msiacrpullv1beta2.AcrPullBindingStatus{
 		TokenExpirationTime:  &metav1.Time{Time: tokenExp},
 		LastTokenRefreshTime: &metav1.Time{Time: time.Now().UTC()},
 	}
@@ -281,7 +281,7 @@ func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBind
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) setErrStatus(ctx context.Context, err error, acrBinding *msiacrpullv1beta1.AcrPullBinding) error {
+func (r *AcrPullBindingReconciler) setErrStatus(ctx context.Context, err error, acrBinding *msiacrpullv1beta2.AcrPullBinding) error {
 	acrBinding.Status.Error = err.Error()
 	if err := r.Status().Update(ctx, acrBinding); err != nil {
 		return err
@@ -356,7 +356,7 @@ func getPullSecretName(acrBindingName string) string {
 	return fmt.Sprintf("%s-msi-acrpull-secret", acrBindingName)
 }
 
-func getPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding, pullSecrets []v1.Secret) *v1.Secret {
+func getPullSecret(acrBinding *msiacrpullv1beta2.AcrPullBinding, pullSecrets []v1.Secret) *v1.Secret {
 	if pullSecrets == nil {
 		return nil
 	}
@@ -372,7 +372,7 @@ func getPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding, pullSecrets []v
 	return nil
 }
 
-func newBasePullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
+func newBasePullSecret(acrBinding *msiacrpullv1beta2.AcrPullBinding,
 	dockerConfig string, scheme *runtime.Scheme) (*v1.Secret, error) {
 
 	pullSecret := &v1.Secret{

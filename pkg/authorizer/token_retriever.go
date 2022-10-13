@@ -206,7 +206,7 @@ func (tr *WorkloadIdentityTokenRetriever) AcquireARMToken(ctx context.Context, c
 }
 
 func readJWTFromFS() (string, error) {
-	const SATokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	const SATokenPath = "/var/run/secrets/token/saToken"
 
 	f, err := os.ReadFile(SATokenPath)
 	if err != nil {
