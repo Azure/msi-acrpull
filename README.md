@@ -17,7 +17,7 @@ kubectl apply -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy
 Once msi-acrpull is installed to your cluster, all you need is to deploy a custom resource `AcrPullBinding` to the application namesapce to bind an user assigned identity to an ACR. Following sample specifies all pods using default service account in the namespace to use user managed identity `my-acr-puller` to pull image from `veryimportantcr.azurecr.io`.
 
 ```yaml
-apiVersion: msi-acrpull.microsoft.com/v1beta1
+apiVersion: msi-acrpull.microsoft.com/v1beta2
 kind: AcrPullBinding
 metadata:
   name: acrpulltest

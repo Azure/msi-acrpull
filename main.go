@@ -13,7 +13,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
+	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -30,7 +30,7 @@ var (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-	_ = msiacrpullv1beta1.AddToScheme(scheme)
+	_ = msiacrpullv1beta2.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 

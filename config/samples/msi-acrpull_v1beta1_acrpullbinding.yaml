@@ -1,4 +1,4 @@
-apiVersion: msi-acrpull.microsoft.com/v1beta1
+apiVersion: msi-acrpull.microsoft.com/v1beta2
 kind: AcrPullBinding
 metadata:
   name: test
