@@ -70,8 +70,8 @@ type AcrPullBindingStatus struct {
 	Error string `json:"error,omitempty"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // AcrPullBinding is the Schema for the acrpullbindings API
 type AcrPullBinding struct {
@@ -82,7 +82,7 @@ type AcrPullBinding struct {
 	Status AcrPullBindingStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // AcrPullBindingList contains a list of AcrPullBinding
 type AcrPullBindingList struct {

@@ -1,4 +1,4 @@
-package controllers
+package controller
 
 import (
 	"context"
@@ -42,13 +42,13 @@ type AcrPullBindingReconciler struct {
 	DefaultACRServer                 string
 }
 
-// +kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=*
-// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=*
+//+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;update;patch
 
-func (r *AcrPullBindingReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("acrpullbinding", req.NamespacedName)
 
 	var acrBinding msiacrpullv1beta1.AcrPullBinding
@@ -163,7 +163,8 @@ func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBi
 }
 
 func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(&v1.Secret{}, ownerKey, func(rawObj runtime.Object) []string {
+	ctx := context.Background()
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &v1.Secret{}, ownerKey, func(rawObj client.Object) []string {
 		secret := rawObj.(*v1.Secret)
 		owner := metav1.GetControllerOf(secret)
 		if owner == nil {

@@ -22,7 +22,7 @@
    SOFTWARE
 */
 
-// Package v1beta1 contains API Schema definitions for the msiacrpull v1beta1 API group
+// Package v1beta1 contains API Schema definitions for the msi-acrpull v1beta1 API group
 // +kubebuilder:object:generate=true
 // +groupName=msi-acrpull.microsoft.com
 package v1beta1
