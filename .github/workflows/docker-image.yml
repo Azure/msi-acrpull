@@ -2,30 +2,28 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 env:
-  IMG: acrpullci.azurecr.io/msi-acrpull:latest
+  IMG: acrpulltest.azurecr.io/msi-acrpull:latest
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: ["self-hosted", "1ES.Pool=1es-msi-acrpull-test-pool"]
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Build the Docker image
-      run: make docker-build
+      run: |
+        make docker-build
 
     - name: Azure Container Registry Login
-      if: github.event_name == 'push'
-      uses: Azure/docker-login@v1
-      with:
-        login-server: acrpullci.azurecr.io
-        username: ${{ secrets.ACR_USERNAME }}
-        password: ${{ secrets.ACR_PASSWORD }}
+      run: |
+        az login --identity
+        az acr login -n acrpulltest.azurecr.io
 
     - name: Push to CI ACR
-      if: github.event_name == 'push'
+      if: (github.event_name == 'push' && github.ref == 'refs/head/main')
       run: make docker-push
