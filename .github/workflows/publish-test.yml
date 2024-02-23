@@ -1,0 +1,29 @@
+name: Publish Test
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+env:
+  IMG: acrpulltest.azurecr.io/msi-acrpull:latest
+
+jobs:
+  build:
+    runs-on:
+      labels: ["self-hosted", "1ES.Pool=1es-msi-acrpull-test-pool"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      run: |
+        make docker-build
+
+    - name: Azure Container Registry Login
+      run: |
+        az login --identity
+        az acr login -n acrpulltest.azurecr.io
+
+    - name: Push to CI ACR
+      if: (github.event_name == 'push' && github.ref == 'refs/head/main')
+      run: make docker-push
