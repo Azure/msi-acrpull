@@ -1,0 +1,42 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
+        cache: true
+
+    - name: Linter
+      uses: golangci/golangci-lint-action@v4
+      with:
+        version: v1.54
+      continue-on-error: true
+
+    - name: Build
+      run: make all
+
+    - name: Test
+      run: make test
+    
+    - name: Upload code coverage
+      uses: codecov/codecov-action@v1
+      with:
+        file: ./cover.out
+        flags: unittests
