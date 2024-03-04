@@ -1,8 +1,13 @@
 apiVersion: msi-acrpull.microsoft.com/v1beta1
 kind: AcrPullBinding
 metadata:
-  name: test
+  labels:
+    app.kubernetes.io/name: acrpullbinding
+    app.kubernetes.io/instance: acrpullbinding-sample
+    app.kubernetes.io/part-of: msi-acrpull
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: msi-acrpull
+  name: acrpullbinding-sample
 spec:
-  managedIdentityClientID: "test-client-id"
+  managedIdentityResourceID: "test-resource-id"
   acrServer: "test.azurecr.io"
-

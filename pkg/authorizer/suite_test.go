@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
-	"github.com/dgrijalva/jwt-go"
-	. "github.com/onsi/ginkgo"
+	"github.com/golang-jwt/jwt/v5"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

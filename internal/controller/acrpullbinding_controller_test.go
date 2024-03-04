@@ -1,4 +1,4 @@
-package controllers
+package controller
 
 import (
 	"context"
@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/mock_authorizer"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/golang/mock/gomock"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	_ "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -31,7 +31,7 @@ type errorFakeCtrlRuntimeClient struct {
 	client.Client
 }
 
-func (e *errorFakeCtrlRuntimeClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+func (e *errorFakeCtrlRuntimeClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	return k8serrors.NewConflict(
 		schema.GroupResource{
 			Group:    "msi-acrpull.microsoft.com",
@@ -47,7 +47,9 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 	Context("Reconcile", func() {
 		It("Should not return error when the acr pull binding is not found", func() {
 			reconciler := &AcrPullBindingReconciler{
-				Client: fake.NewFakeClientWithScheme(scheme.Scheme),
+				Client: fake.NewClientBuilder().
+					WithScheme(scheme.Scheme).
+					Build(),
 				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 				Scheme: scheme.Scheme,
 			}
@@ -56,7 +58,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Namespace: "default",
 				},
 			}
-			_, err := reconciler.Reconcile(req)
+			_, err := reconciler.Reconcile(context.Background(), req)
 			Expect(err).To(BeNil())
 		})
 
@@ -65,7 +67,9 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			fakeAuth := mock_authorizer.NewMockInterface(mockCtrl)
 
 			reconciler := &AcrPullBindingReconciler{
-				Client:                           fake.NewFakeClientWithScheme(scheme.Scheme),
+				Client: fake.NewClientBuilder().
+					WithScheme(scheme.Scheme).
+					Build(),
 				Log:                              ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 				Scheme:                           scheme.Scheme,
 				Auth:                             fakeAuth,
@@ -91,13 +95,16 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Name:      "test",
 				},
 			}
-			reconciler.Reconcile(req)
+			reconciler.Reconcile(context.Background(), req)
 			mockCtrl.Finish()
 		})
 
 		It("Should return error when getting acr pull binding returns error other than NotFound", func() {
 			reconciler := &AcrPullBindingReconciler{
-				Client: &errorFakeCtrlRuntimeClient{fake.NewFakeClientWithScheme(scheme.Scheme)},
+				Client: &errorFakeCtrlRuntimeClient{fake.NewClientBuilder().
+					WithScheme(scheme.Scheme).
+					Build(),
+				},
 				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 				Scheme: scheme.Scheme,
 			}
@@ -106,7 +113,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Namespace: "default",
 				},
 			}
-			_, err := reconciler.Reconcile(req)
+			_, err := reconciler.Reconcile(context.Background(), req)
 			Expect(err).To(Not(BeNil()))
 			Expect(err.Error()).To(ContainSubstring("test error"))
 		})
@@ -154,7 +161,10 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 				},
 			}
 			reconciler := &AcrPullBindingReconciler{
-				Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding),
+				Client: fake.NewClientBuilder().
+					WithScheme(scheme.Scheme).
+					WithRuntimeObjects(acrBinding).
+					Build(),
 				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 				Scheme: scheme.Scheme,
 			}
@@ -186,7 +196,10 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 				},
 			}
 			reconciler := &AcrPullBindingReconciler{
-				Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding, serviceAccount),
+				Client: fake.NewClientBuilder().
+					WithScheme(scheme.Scheme).
+					WithRuntimeObjects(acrBinding, serviceAccount).
+					Build(),
 				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 				Scheme: scheme.Scheme,
 			}
@@ -214,7 +227,10 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 				},
 			}
 			reconciler := &AcrPullBindingReconciler{
-				Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding),
+				Client: fake.NewClientBuilder().
+					WithScheme(scheme.Scheme).
+					WithRuntimeObjects(acrBinding).
+					Build(),
 				Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 				Scheme: scheme.Scheme,
 			}
@@ -260,7 +276,10 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					},
 				}
 				reconciler := &AcrPullBindingReconciler{
-					Client: fake.NewFakeClientWithScheme(scheme.Scheme, acrBinding, serviceAccount),
+					Client: fake.NewClientBuilder().
+						WithScheme(scheme.Scheme).
+						WithRuntimeObjects(acrBinding, serviceAccount).
+						Build(),
 					Log:    ctrl.Log.WithName("controllers").WithName("acrpullbinding-controller"),
 					Scheme: scheme.Scheme,
 				}

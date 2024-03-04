@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type AccessToken string
@@ -29,7 +29,9 @@ func (t AccessToken) GetTokenTenantId() (string, error) {
 }
 
 func (t AccessToken) GetTokenClaims() (jwt.MapClaims, error) {
-	p := &jwt.Parser{SkipClaimsValidation: true}
+	p := &jwt.Parser{}
+	skipValidations := jwt.WithoutClaimsValidation()
+	skipValidations(p)
 
 	token, _, err := p.ParseUnverified(string(t), jwt.MapClaims{})
 	if err != nil {

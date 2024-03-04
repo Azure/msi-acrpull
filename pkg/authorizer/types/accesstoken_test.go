@@ -5,8 +5,8 @@ import (
 	"crypto/rsa"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
-	. "github.com/onsi/ginkgo"
+	"github.com/golang-jwt/jwt/v5"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
@@ -19,7 +19,7 @@ var _ = Describe("Access Token Tests", func() {
 		signingKey *rsa.PrivateKey
 	)
 
-	BeforeSuite(func() {
+	BeforeEach(func() {
 		var err error
 		signingKey, err = rsa.GenerateKey(rand.Reader, 2048)
 		Expect(err).ToNot(HaveOccurred())
