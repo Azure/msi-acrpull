@@ -22,11 +22,11 @@ jobs:
       id: get_metadata
       run: |
         if [ "${{ github.event_name }}" == "push" ]; then
-          IMG_TAG="${{ github.ref }}"
+          IMG_TAG="${{ github.ref_name }}"
         else
           IMG_TAG=${{ github.event.inputs.releaseTag }}
         fi
-        IMG="/public/aks/msi-acrpull:${IMG_TAG}"
+        IMG="public/aks/msi-acrpull:${IMG_TAG}"
         echo "IMG_TAG=${IMG_TAG}" >> ${GITHUB_OUTPUT}
         echo "IMG=${IMG}" >> ${GITHUB_OUTPUT}
     outputs:
@@ -38,7 +38,7 @@ jobs:
       labels: ["self-hosted", "1ES.Pool=${{ vars.RUNNER_BASE_NAME}}-ubuntu"]
     needs: setup
     env:
-      IMG: ${{ secrets.AZURE_CONTAINER_REGISTRY }}${{ needs.setup.outputs.IMG }}
+      IMG: ${{ secrets.AZURE_CONTAINER_REGISTRY }}/${{ needs.setup.outputs.IMG }}
     steps:
     - name: Check out code
       uses: actions/checkout@v4
