@@ -23,7 +23,7 @@ jobs:
         go-version-file: 'go.mod'
         cache: true
 
-    - name: Linter
+    - name: Run Linter
       uses: golangci/golangci-lint-action@v4
       with:
         version: v1.54
