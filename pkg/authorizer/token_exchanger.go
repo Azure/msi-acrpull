@@ -15,12 +15,14 @@ import (
 // TokenExchanger is an instance of ACRTokenExchanger
 type TokenExchanger struct {
 	acrServerScheme string
+	client          *rateLimitedClient
 }
 
 // NewTokenExchanger returns a new token exchanger
 func NewTokenExchanger() *TokenExchanger {
 	return &TokenExchanger{
 		acrServerScheme: "https",
+		client:          newRateLimitedClient(),
 	}
 }
 
@@ -55,11 +57,10 @@ func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acr
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Add("Content-Length", strconv.Itoa(len(parameters.Encode())))
 
-	client := &http.Client{}
 	var resp *http.Response
 	defer closeResponse(resp)
 
-	resp, err = client.Do(req)
+	resp, err = te.client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send token exchange request: %w", err)
 	}

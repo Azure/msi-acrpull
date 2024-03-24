@@ -38,7 +38,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken("", testResourceID)
 
 			Expect(err).To(BeNil())
@@ -60,7 +60,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken("", testResourceID)
 
 			os.Unsetenv(customARMResourceEnvVar)
@@ -82,7 +82,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken(testClientID, "")
 
 			Expect(err).To(BeNil())
@@ -97,7 +97,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWith(404, ""),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds)
+			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken(testClientID, "")
 
 			Expect(err).NotTo(BeNil())
@@ -118,7 +118,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
+			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds*1000)
 			token, err := tr.AcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
@@ -142,7 +142,7 @@ var _ = Describe("Token Retriever Tests", func() {
 					ghttp.RespondWithJSONEncoded(200, tokenResp),
 				))
 
-			tr := newTestTokenRetriever(server.URL(), defaultCacheExpirationInSeconds*1000)
+			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds*1000)
 			token, err := tr.AcquireARMToken("", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
@@ -171,7 +171,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			// set cache expire immediately
-			tr := newTestTokenRetriever(server.URL(), 0)
+			tr := newTestTokenRetriever(server, 0)
 			token, err := tr.AcquireARMToken(testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
@@ -185,10 +185,14 @@ var _ = Describe("Token Retriever Tests", func() {
 	})
 })
 
-func newTestTokenRetriever(metadataEndpoint string, cacheExpirationInMilliSeconds int) *TokenRetriever {
+func newTestTokenRetriever(server *ghttp.Server, cacheExpirationInMilliSeconds int) *TokenRetriever {
+	client := newRateLimitedClient()
+	client.httpClient = server.HTTPTestServer.Client()
+
 	return &TokenRetriever{
-		metadataEndpoint: metadataEndpoint,
+		metadataEndpoint: server.URL(),
 		cache:            sync.Map{},
 		cacheExpiration:  time.Duration(cacheExpirationInMilliSeconds) * time.Millisecond,
+		client:           client,
 	}
 }
