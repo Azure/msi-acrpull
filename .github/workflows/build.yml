@@ -32,7 +32,9 @@ jobs:
       run: make all
 
     - name: Test
-      run: make test
+      run: |
+        go mod download
+        make test
     
     - name: Upload code coverage
       uses: codecov/codecov-action@v1
