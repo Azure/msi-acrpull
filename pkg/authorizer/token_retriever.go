@@ -26,6 +26,7 @@ type TokenRetriever struct {
 	metadataEndpoint string
 	cache            sync.Map
 	cacheExpiration  time.Duration
+	client           *rateLimitedClient
 }
 
 type cachedToken struct {
@@ -39,6 +40,7 @@ func NewTokenRetriever() *TokenRetriever {
 		metadataEndpoint: msiMetadataEndpoint,
 		cache:            sync.Map{},
 		cacheExpiration:  time.Duration(defaultCacheExpirationInSeconds) * time.Second,
+		client:           newRateLimitedClient(),
 	}
 }
 
@@ -98,11 +100,10 @@ func (tr *TokenRetriever) refreshToken(clientID, resourceID string) (types.Acces
 	}
 	req.Header.Add("Metadata", "true")
 
-	client := &http.Client{}
 	var resp *http.Response
 	defer closeResponse(resp)
 
-	resp, err = client.Do(req)
+	resp, err = tr.client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send metadata endpoint request: %w", err)
 	}
