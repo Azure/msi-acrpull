@@ -3,9 +3,10 @@ package authorizer
 import (
 	"context"
 
-//go:generate sh -c "mockgen github.com/Azure/msi-acrpull/pkg/authorizer Interface,ManagedIdentityTokenRetriever,ACRTokenExchanger > ./mock_$GOPACKAGE/interfaces.go"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
+
+//go:generate sh -c "$MOCKGEN github.com/Azure/msi-acrpull/pkg/authorizer Interface,ManagedIdentityTokenRetriever,ACRTokenExchanger > ./mock_$GOPACKAGE/interfaces.go"
 
 // Interface is the authorizer interface to acquire ACR access tokens.
 type Interface interface {
