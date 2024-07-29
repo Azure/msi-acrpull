@@ -77,6 +77,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 				DefaultACRServer:                 "DefaultACRServer",
 			}
 			fakeAuth.EXPECT().AcquireACRAccessTokenWithResourceID(
+				context.Background(),
 				gomock.Eq(reconciler.DefaultManagedIdentityResourceID),
 				gomock.Eq(reconciler.DefaultACRServer)).Times(1)
 

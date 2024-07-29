@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -39,7 +40,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken("", testResourceID)
+			token, err := tr.AcquireARMToken(context.Background(), "", testResourceID)
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -61,7 +62,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken("", testResourceID)
+			token, err := tr.AcquireARMToken(context.Background(), "", testResourceID)
 
 			os.Unsetenv(customARMResourceEnvVar)
 
@@ -83,7 +84,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -98,7 +99,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
 
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("404"))
@@ -119,12 +120,12 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds*1000)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken(testClientID, "")
+			token, err = tr.AcquireARMToken(context.Background(), testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -143,12 +144,12 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds*1000)
-			token, err := tr.AcquireARMToken("", testResourceID)
+			token, err := tr.AcquireARMToken(context.Background(), "", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken("", testResourceID)
+			token, err = tr.AcquireARMToken(context.Background(), "", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -172,12 +173,12 @@ var _ = Describe("Token Retriever Tests", func() {
 
 			// set cache expire immediately
 			tr := newTestTokenRetriever(server, 0)
-			token, err := tr.AcquireARMToken(testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken(testClientID, "")
+			token, err = tr.AcquireARMToken(context.Background(), testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(2))
