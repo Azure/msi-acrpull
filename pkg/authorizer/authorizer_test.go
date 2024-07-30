@@ -39,10 +39,10 @@ var _ = Describe("Authorizer Tests", func() {
 				tokenExchanger: te,
 			}
 
-			tr.EXPECT().AcquireARMToken(context.Background(), "", testResourceID).Return(armToken, nil).Times(1)
-			te.EXPECT().ExchangeACRAccessToken(context.Background(), armToken, testACR).Return(acrToken, nil).Times(1)
+			tr.EXPECT().AcquireARMToken(context.Background(), GinkgoLogr, "", testResourceID).Return(armToken, nil).Times(1)
+			te.EXPECT().ExchangeACRAccessToken(context.Background(), GinkgoLogr, armToken, testACR).Return(acrToken, nil).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithResourceID(context.Background(), testResourceID, testACR)
+			t, err := az.AcquireACRAccessTokenWithResourceID(context.Background(), GinkgoLogr, testResourceID, testACR)
 			Expect(err).To(BeNil())
 			Expect(t).NotTo(BeNil())
 			Expect(t).To(Equal(acrToken))
@@ -63,10 +63,10 @@ var _ = Describe("Authorizer Tests", func() {
 				tokenExchanger: te,
 			}
 
-			tr.EXPECT().AcquireARMToken(context.Background(), testClientID, "").Return(armToken, nil).Times(1)
-			te.EXPECT().ExchangeACRAccessToken(context.Background(), armToken, testACR).Return(acrToken, nil).Times(1)
+			tr.EXPECT().AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "").Return(armToken, nil).Times(1)
+			te.EXPECT().ExchangeACRAccessToken(context.Background(), GinkgoLogr, armToken, testACR).Return(acrToken, nil).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithClientID(context.Background(), testClientID, testACR)
+			t, err := az.AcquireACRAccessTokenWithClientID(context.Background(), GinkgoLogr, testClientID, testACR)
 			Expect(err).To(BeNil())
 			Expect(t).NotTo(BeNil())
 			Expect(t).To(Equal(acrToken))
@@ -81,9 +81,9 @@ var _ = Describe("Authorizer Tests", func() {
 				tokenExchanger: te,
 			}
 
-			tr.EXPECT().AcquireARMToken(context.Background(), testClientID, "").Return(types.AccessToken(""), errors.New("test error")).Times(1)
+			tr.EXPECT().AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "").Return(types.AccessToken(""), errors.New("test error")).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithClientID(context.Background(), testClientID, testACR)
+			t, err := az.AcquireACRAccessTokenWithClientID(context.Background(), GinkgoLogr, testClientID, testACR)
 			Expect(string(t)).To(Equal(""))
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("test error"))

@@ -86,9 +86,9 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var err error
 
 	if msiClientID != "" {
-		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithClientID(ctx, msiClientID, acrServer)
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithClientID(ctx, log, msiClientID, acrServer)
 	} else {
-		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithResourceID(ctx, msiResourceID, acrServer)
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithResourceID(ctx, log, msiResourceID, acrServer)
 	}
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")

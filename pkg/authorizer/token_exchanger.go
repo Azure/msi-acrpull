@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
+	"github.com/go-logr/logr"
 )
 
 // TokenExchanger is an instance of ACRTokenExchanger
@@ -28,7 +29,7 @@ func NewTokenExchanger() *TokenExchanger {
 }
 
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
-func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
+func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, log logr.Logger, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
 	tenantID, err := armToken.GetTokenTenantId()
 	if err != nil {
 		return "", fmt.Errorf("failed to get tenant id from ARM token: %w", err)
@@ -62,7 +63,7 @@ func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, armToken t
 	defer func() {
 		if resp != nil && resp.Body != nil {
 			if err := resp.Body.Close(); err != nil {
-				fmt.Printf("failed to close response body: %v\n", err)
+				log.Error(err, "failed to close response body")
 			}
 		}
 	}()

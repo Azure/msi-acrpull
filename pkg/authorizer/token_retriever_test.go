@@ -40,7 +40,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(context.Background(), "", testResourceID)
+			token, err := tr.AcquireARMToken(context.Background(), GinkgoLogr, "", testResourceID)
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -63,7 +63,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(context.Background(), "", testResourceID)
+			token, err := tr.AcquireARMToken(context.Background(), GinkgoLogr, "", testResourceID)
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -86,7 +86,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "")
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -101,7 +101,7 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
-			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "")
 
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("404"))
@@ -122,12 +122,12 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds*1000)
-			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken(context.Background(), testClientID, "")
+			token, err = tr.AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -146,12 +146,12 @@ var _ = Describe("Token Retriever Tests", func() {
 				))
 
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds*1000)
-			token, err := tr.AcquireARMToken(context.Background(), "", testResourceID)
+			token, err := tr.AcquireARMToken(context.Background(), GinkgoLogr, "", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken(context.Background(), "", testResourceID)
+			token, err = tr.AcquireARMToken(context.Background(), GinkgoLogr, "", testResourceID)
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -175,12 +175,12 @@ var _ = Describe("Token Retriever Tests", func() {
 
 			// set cache expire immediately
 			tr := newTestTokenRetriever(server, 0)
-			token, err := tr.AcquireARMToken(context.Background(), testClientID, "")
+			token, err := tr.AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 
-			token, err = tr.AcquireARMToken(context.Background(), testClientID, "")
+			token, err = tr.AcquireARMToken(context.Background(), GinkgoLogr, testClientID, "")
 			Expect(err).To(BeNil())
 			Expect(token).To(Equal(armToken))
 			Expect(server.ReceivedRequests()).Should(HaveLen(2))

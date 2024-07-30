@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
+	"github.com/go-logr/logr"
 )
 
 const (
@@ -46,7 +47,7 @@ func NewTokenRetriever() *TokenRetriever {
 }
 
 // AcquireARMToken acquires the managed identity ARM access token
-func (tr *TokenRetriever) AcquireARMToken(ctx context.Context, clientID string, resourceID string) (types.AccessToken, error) {
+func (tr *TokenRetriever) AcquireARMToken(ctx context.Context, log logr.Logger, clientID string, resourceID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	if cacheKey == "" {
 		cacheKey = strings.ToLower(resourceID)
@@ -62,7 +63,7 @@ func (tr *TokenRetriever) AcquireARMToken(ctx context.Context, clientID string, 
 		tr.cache.Delete(cacheKey)
 	}
 
-	token, err := tr.refreshToken(ctx, clientID, resourceID)
+	token, err := tr.refreshToken(ctx, log, clientID, resourceID)
 	if err != nil {
 		return "", fmt.Errorf("failed to refresh ARM access token: %w", err)
 	}
@@ -71,7 +72,7 @@ func (tr *TokenRetriever) AcquireARMToken(ctx context.Context, clientID string, 
 	return token, nil
 }
 
-func (tr *TokenRetriever) refreshToken(ctx context.Context, clientID, resourceID string) (types.AccessToken, error) {
+func (tr *TokenRetriever) refreshToken(ctx context.Context, log logr.Logger, clientID, resourceID string) (types.AccessToken, error) {
 	msiEndpoint, err := url.Parse(tr.metadataEndpoint)
 	if err != nil {
 		return "", err
@@ -105,7 +106,7 @@ func (tr *TokenRetriever) refreshToken(ctx context.Context, clientID, resourceID
 	defer func() {
 		if resp != nil && resp.Body != nil {
 			if err := resp.Body.Close(); err != nil {
-				fmt.Printf("failed to close response body: %v\n", err)
+				log.Error(err, "failed to close response body")
 			}
 		}
 	}()
