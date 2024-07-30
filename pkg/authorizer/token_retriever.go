@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -45,7 +46,7 @@ func NewTokenRetriever() *TokenRetriever {
 }
 
 // AcquireARMToken acquires the managed identity ARM access token
-func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (types.AccessToken, error) {
+func (tr *TokenRetriever) AcquireARMToken(ctx context.Context, clientID string, resourceID string) (types.AccessToken, error) {
 	cacheKey := strings.ToLower(clientID)
 	if cacheKey == "" {
 		cacheKey = strings.ToLower(resourceID)
@@ -61,7 +62,7 @@ func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (t
 		tr.cache.Delete(cacheKey)
 	}
 
-	token, err := tr.refreshToken(clientID, resourceID)
+	token, err := tr.refreshToken(ctx, clientID, resourceID)
 	if err != nil {
 		return "", fmt.Errorf("failed to refresh ARM access token: %w", err)
 	}
@@ -70,7 +71,7 @@ func (tr *TokenRetriever) AcquireARMToken(clientID string, resourceID string) (t
 	return token, nil
 }
 
-func (tr *TokenRetriever) refreshToken(clientID, resourceID string) (types.AccessToken, error) {
+func (tr *TokenRetriever) refreshToken(ctx context.Context, clientID, resourceID string) (types.AccessToken, error) {
 	msiEndpoint, err := url.Parse(tr.metadataEndpoint)
 	if err != nil {
 		return "", err
@@ -94,7 +95,7 @@ func (tr *TokenRetriever) refreshToken(clientID, resourceID string) (types.Acces
 
 	msiEndpoint.RawQuery = parameters.Encode()
 
-	req, err := http.NewRequest("GET", msiEndpoint.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", msiEndpoint.String(), nil)
 	if err != nil {
 		return "", err
 	}

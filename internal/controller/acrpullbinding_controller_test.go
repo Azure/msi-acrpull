@@ -9,9 +9,9 @@ import (
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/mock_authorizer"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -77,6 +77,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 				DefaultACRServer:                 "DefaultACRServer",
 			}
 			fakeAuth.EXPECT().AcquireACRAccessTokenWithResourceID(
+				context.Background(),
 				gomock.Eq(reconciler.DefaultManagedIdentityResourceID),
 				gomock.Eq(reconciler.DefaultACRServer)).Times(1)
 

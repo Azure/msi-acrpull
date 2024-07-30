@@ -1,13 +1,14 @@
 package authorizer
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/mock_authorizer"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -38,10 +39,10 @@ var _ = Describe("Authorizer Tests", func() {
 				tokenExchanger: te,
 			}
 
-			tr.EXPECT().AcquireARMToken("", testResourceID).Return(armToken, nil).Times(1)
-			te.EXPECT().ExchangeACRAccessToken(armToken, testACR).Return(acrToken, nil).Times(1)
+			tr.EXPECT().AcquireARMToken(context.Background(), "", testResourceID).Return(armToken, nil).Times(1)
+			te.EXPECT().ExchangeACRAccessToken(context.Background(), armToken, testACR).Return(acrToken, nil).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithResourceID(testResourceID, testACR)
+			t, err := az.AcquireACRAccessTokenWithResourceID(context.Background(), testResourceID, testACR)
 			Expect(err).To(BeNil())
 			Expect(t).NotTo(BeNil())
 			Expect(t).To(Equal(acrToken))
@@ -62,10 +63,10 @@ var _ = Describe("Authorizer Tests", func() {
 				tokenExchanger: te,
 			}
 
-			tr.EXPECT().AcquireARMToken(testClientID, "").Return(armToken, nil).Times(1)
-			te.EXPECT().ExchangeACRAccessToken(armToken, testACR).Return(acrToken, nil).Times(1)
+			tr.EXPECT().AcquireARMToken(context.Background(), testClientID, "").Return(armToken, nil).Times(1)
+			te.EXPECT().ExchangeACRAccessToken(context.Background(), armToken, testACR).Return(acrToken, nil).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithClientID(testClientID, testACR)
+			t, err := az.AcquireACRAccessTokenWithClientID(context.Background(), testClientID, testACR)
 			Expect(err).To(BeNil())
 			Expect(t).NotTo(BeNil())
 			Expect(t).To(Equal(acrToken))
@@ -80,9 +81,9 @@ var _ = Describe("Authorizer Tests", func() {
 				tokenExchanger: te,
 			}
 
-			tr.EXPECT().AcquireARMToken(testClientID, "").Return(types.AccessToken(""), errors.New("test error")).Times(1)
+			tr.EXPECT().AcquireARMToken(context.Background(), testClientID, "").Return(types.AccessToken(""), errors.New("test error")).Times(1)
 
-			t, err := az.AcquireACRAccessTokenWithClientID(testClientID, testACR)
+			t, err := az.AcquireACRAccessTokenWithClientID(context.Background(), testClientID, testACR)
 			Expect(string(t)).To(Equal(""))
 			Expect(err).NotTo(BeNil())
 			Expect(err.Error()).To(ContainSubstring("test error"))

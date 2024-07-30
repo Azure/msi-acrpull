@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"net/url"
 	"time"
 
@@ -48,7 +49,7 @@ var _ = Describe("Token Exchanger Tests", func() {
 				))
 
 			te := newTestTokenExchanger(server)
-			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
+			token, err := te.ExchangeACRAccessToken(context.Background(), armToken, ul.Host)
 
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
@@ -74,7 +75,7 @@ var _ = Describe("Token Exchanger Tests", func() {
 				))
 
 			te := newTestTokenExchanger(server)
-			token, err := te.ExchangeACRAccessToken(armToken, ul.Host)
+			token, err := te.ExchangeACRAccessToken(context.Background(), armToken, ul.Host)
 
 			Expect(err).NotTo(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))

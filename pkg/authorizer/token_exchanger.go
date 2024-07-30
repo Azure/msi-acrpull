@@ -1,6 +1,7 @@
 package authorizer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,7 +28,7 @@ func NewTokenExchanger() *TokenExchanger {
 }
 
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
-func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
+func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
 	tenantID, err := armToken.GetTokenTenantId()
 	if err != nil {
 		return "", fmt.Errorf("failed to get tenant id from ARM token: %w", err)
@@ -49,7 +50,7 @@ func (te *TokenExchanger) ExchangeACRAccessToken(armToken types.AccessToken, acr
 	parameters.Add("tenant", tenantID)
 	parameters.Add("access_token", string(armToken))
 
-	req, err := http.NewRequest("POST", exchangeURL, strings.NewReader(parameters.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", exchangeURL, strings.NewReader(parameters.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("failed to construct token exchange reqeust: %w", err)
 	}

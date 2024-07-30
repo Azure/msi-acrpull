@@ -1,14 +1,14 @@
 module github.com/Azure/msi-acrpull
 
-go 1.22.2
+go 1.22.4
 
 require (
 	github.com/go-logr/logr v1.2.4
 	github.com/golang-jwt/jwt/v5 v5.1.0
-	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.10
 	github.com/pkg/errors v0.9.1
+	go.uber.org/mock v0.4.0
 	golang.org/x/time v0.3.0
 	k8s.io/api v0.28.3
 	k8s.io/apimachinery v0.28.3
