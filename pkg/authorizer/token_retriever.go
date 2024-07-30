@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -102,7 +102,13 @@ func (tr *TokenRetriever) refreshToken(ctx context.Context, clientID, resourceID
 	req.Header.Add("Metadata", "true")
 
 	var resp *http.Response
-	defer closeResponse(resp)
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			if err := resp.Body.Close(); err != nil {
+				fmt.Printf("failed to close response body: %v\n", err)
+			}
+		}
+	}()
 
 	resp, err = tr.client.Do(req)
 	if err != nil {
@@ -110,11 +116,11 @@ func (tr *TokenRetriever) refreshToken(ctx context.Context, clientID, resourceID
 	}
 
 	if resp.StatusCode != 200 {
-		responseBytes, _ := ioutil.ReadAll(resp.Body)
+		responseBytes, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("Metadata endpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
 	}
 
-	responseBytes, err := ioutil.ReadAll(resp.Body)
+	responseBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read metadata endpoint response: %w", err)
 	}
@@ -126,11 +132,4 @@ func (tr *TokenRetriever) refreshToken(ctx context.Context, clientID, resourceID
 	}
 
 	return types.AccessToken(tokenResp.AccessToken), nil
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil {
-		return
-	}
-	resp.Body.Close()
 }

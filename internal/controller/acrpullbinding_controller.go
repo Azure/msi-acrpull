@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -188,7 +189,7 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, log logr.Logger) error {
-	if !containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
+	if !slices.Contains(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
 		acrBinding.ObjectMeta.Finalizers = append(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
 		if err := r.Update(ctx, acrBinding); err != nil {
 			log.Error(err, "Failed to append acr pull binding finalizer", "finalizerName", msiAcrPullFinalizerName)
@@ -200,7 +201,7 @@ func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding 
 
 func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding,
 	req ctrl.Request, serviceAccountName string, log logr.Logger) error {
-	if containsString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
+	if slices.Contains(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
 		// our finalizer is present, so need to clean up ImagePullSecret reference
 		var serviceAccount v1.ServiceAccount
 		saNamespacedName := k8stypes.NamespacedName{
@@ -215,7 +216,9 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 			log.Info("Service account is not found. Continue removing finalizer", "serviceAccountName", saNamespacedName.Name)
 		} else {
 			pullSecretName := getPullSecretName(acrBinding.Name)
-			serviceAccount.ImagePullSecrets = removeImagePullSecretRef(serviceAccount.ImagePullSecrets, pullSecretName)
+			serviceAccount.ImagePullSecrets = slices.DeleteFunc(serviceAccount.ImagePullSecrets, func(reference v1.LocalObjectReference) bool {
+				return reference.Name == pullSecretName
+			})
 			if err := r.Update(ctx, &serviceAccount); err != nil {
 				log.Error(err, "Failed to remove image pull secret reference from default service account", "pullSecretName", pullSecretName)
 				return err
@@ -223,7 +226,9 @@ func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBindi
 		}
 
 		// remove our finalizer from the list and update it.
-		acrBinding.ObjectMeta.Finalizers = removeString(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
+		acrBinding.ObjectMeta.Finalizers = slices.DeleteFunc(acrBinding.ObjectMeta.Finalizers, func(s string) bool {
+			return s == msiAcrPullFinalizerName
+		})
 		if err := r.Update(ctx, acrBinding); err != nil {
 			log.Error(err, "Failed to remove acr pull binding finalizer", "finalizerName", msiAcrPullFinalizerName)
 			return err
@@ -244,7 +249,9 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 		return err
 	}
 	pullSecretName := getPullSecretName(acrBinding.Name)
-	if !imagePullSecretRefExist(serviceAccount.ImagePullSecrets, pullSecretName) {
+	if !slices.ContainsFunc(serviceAccount.ImagePullSecrets, func(reference v1.LocalObjectReference) bool {
+		return reference.Name == pullSecretName
+	}) {
 		log.Info("Updating default service account")
 		appendImagePullSecretRef(&serviceAccount, pullSecretName)
 		if err := r.Update(ctx, &serviceAccount); err != nil {
@@ -292,49 +299,6 @@ func appendImagePullSecretRef(serviceAccount *v1.ServiceAccount, secretName stri
 		Name: secretName,
 	}
 	serviceAccount.ImagePullSecrets = append(serviceAccount.ImagePullSecrets, *secretReference)
-}
-
-func imagePullSecretRefExist(imagePullSecretRefs []v1.LocalObjectReference, secretName string) bool {
-	if imagePullSecretRefs == nil {
-		return false
-	}
-	for _, secretRef := range imagePullSecretRefs {
-		if secretRef.Name == secretName {
-			return true
-		}
-	}
-	return false
-}
-
-func removeImagePullSecretRef(imagePullSecretRefs []v1.LocalObjectReference, secretName string) []v1.LocalObjectReference {
-	var result []v1.LocalObjectReference
-	for _, secretRef := range imagePullSecretRefs {
-		if secretRef.Name == secretName {
-			continue
-		}
-		result = append(result, secretRef)
-	}
-	return result
-}
-
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-func removeString(slice []string, s string) []string {
-	var result []string
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return result
 }
 
 func getServiceAccountName(userSpecifiedName string) string {

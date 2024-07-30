@@ -88,7 +88,8 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Finalizers: []string{},
 				},
 			}
-			reconciler.Create(context.TODO(), acrBinding)
+			err := reconciler.Create(context.TODO(), acrBinding)
+			Expect(err).ToNot(HaveOccurred())
 
 			req := ctrl.Request{
 				NamespacedName: k8stypes.NamespacedName{
@@ -96,7 +97,8 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 					Name:      "test",
 				},
 			}
-			reconciler.Reconcile(context.Background(), req)
+			_, _ = reconciler.Reconcile(context.Background(), req)
+			// TODO: this test doesn't seem to be functional - we should make it so
 			mockCtrl.Finish()
 		})
 
@@ -317,52 +319,6 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			appendImagePullSecretRef(serviceAccount, "test")
 			Expect(serviceAccount.ImagePullSecrets).To(HaveLen(1))
 			Expect(serviceAccount.ImagePullSecrets[0].Name).To(Equal("test"))
-		})
-	})
-
-	Context("imagePullSecretRefExist", func() {
-		It("Should check if image pull secret reference exists given name", func() {
-			imagePullSecretRef := []v1.LocalObjectReference{
-				{
-					Name: "test-msi-acrpull-secret",
-				},
-			}
-			exist := imagePullSecretRefExist(imagePullSecretRef, "test-msi-acrpull-secret")
-			Expect(exist).To(BeTrue())
-
-			exist = imagePullSecretRefExist(imagePullSecretRef, "not-exist")
-			Expect(exist).To(BeFalse())
-		})
-	})
-
-	Context("removeImagePullSecretRef", func() {
-		It("Should remove image pull secret reference", func() {
-			imagePullSecretRef := []v1.LocalObjectReference{
-				{
-					Name: "test-msi-acrpull-secret",
-				},
-			}
-			newImagePullSecretRef := removeImagePullSecretRef(imagePullSecretRef, "test-msi-acrpull-secret")
-			Expect(newImagePullSecretRef).To(BeEmpty())
-		})
-	})
-
-	Context("containsString", func() {
-		It("Should check if an array of strings contains a string", func() {
-			strings := []string{"test-string"}
-			contains := containsString(strings, "test-string")
-			Expect(contains).To(BeTrue())
-
-			contains = containsString(strings, "not-exist")
-			Expect(contains).To(BeFalse())
-		})
-	})
-
-	Context("removeString", func() {
-		It("Should remove string from an array", func() {
-			strings := []string{"test-string"}
-			newStrings := removeString(strings, "test-string")
-			Expect(newStrings).To(BeEmpty())
 		})
 	})
 

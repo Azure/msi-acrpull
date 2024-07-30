@@ -53,7 +53,8 @@ var _ = Describe("Token Retriever Tests", func() {
 
 			tokenResp := &tokenResponse{AccessToken: string(armToken)}
 
-			os.Setenv(customARMResourceEnvVar, "https://management.usgovcloudapi.net/")
+			err = os.Setenv(customARMResourceEnvVar, "https://management.usgovcloudapi.net/")
+			Expect(err).ToNot(HaveOccurred())
 
 			server.AppendHandlers(
 				ghttp.CombineHandlers(
@@ -64,11 +65,12 @@ var _ = Describe("Token Retriever Tests", func() {
 			tr := newTestTokenRetriever(server, defaultCacheExpirationInSeconds)
 			token, err := tr.AcquireARMToken(context.Background(), "", testResourceID)
 
-			os.Unsetenv(customARMResourceEnvVar)
-
 			Expect(err).To(BeNil())
 			Expect(server.ReceivedRequests()).Should(HaveLen(1))
 			Expect(token).To(Equal(armToken))
+
+			err = os.Unsetenv(customARMResourceEnvVar)
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("Get ARM Token with Client ID Successfully", func() {
