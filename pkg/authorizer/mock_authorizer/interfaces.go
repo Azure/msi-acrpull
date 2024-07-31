@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/Azure/msi-acrpull/pkg/authorizer/types"
+	logr "github.com/go-logr/logr"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,33 +42,33 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AcquireACRAccessTokenWithClientID mocks base method.
-func (m *MockInterface) AcquireACRAccessTokenWithClientID(ctx context.Context, clientID, acrFQDN string) (types.AccessToken, error) {
+func (m *MockInterface) AcquireACRAccessTokenWithClientID(ctx context.Context, log logr.Logger, clientID, acrFQDN string) (types.AccessToken, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithClientID", ctx, clientID, acrFQDN)
+	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithClientID", ctx, log, clientID, acrFQDN)
 	ret0, _ := ret[0].(types.AccessToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AcquireACRAccessTokenWithClientID indicates an expected call of AcquireACRAccessTokenWithClientID.
-func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithClientID(ctx, clientID, acrFQDN any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithClientID(ctx, log, clientID, acrFQDN any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithClientID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithClientID), ctx, clientID, acrFQDN)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithClientID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithClientID), ctx, log, clientID, acrFQDN)
 }
 
 // AcquireACRAccessTokenWithResourceID mocks base method.
-func (m *MockInterface) AcquireACRAccessTokenWithResourceID(ctx context.Context, identityResourceID, acrFQDN string) (types.AccessToken, error) {
+func (m *MockInterface) AcquireACRAccessTokenWithResourceID(ctx context.Context, log logr.Logger, identityResourceID, acrFQDN string) (types.AccessToken, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithResourceID", ctx, identityResourceID, acrFQDN)
+	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithResourceID", ctx, log, identityResourceID, acrFQDN)
 	ret0, _ := ret[0].(types.AccessToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AcquireACRAccessTokenWithResourceID indicates an expected call of AcquireACRAccessTokenWithResourceID.
-func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithResourceID(ctx, identityResourceID, acrFQDN any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithResourceID(ctx, log, identityResourceID, acrFQDN any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithResourceID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithResourceID), ctx, identityResourceID, acrFQDN)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithResourceID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithResourceID), ctx, log, identityResourceID, acrFQDN)
 }
 
 // MockManagedIdentityTokenRetriever is a mock of ManagedIdentityTokenRetriever interface.
@@ -94,18 +95,18 @@ func (m *MockManagedIdentityTokenRetriever) EXPECT() *MockManagedIdentityTokenRe
 }
 
 // AcquireARMToken mocks base method.
-func (m *MockManagedIdentityTokenRetriever) AcquireARMToken(ctx context.Context, clientID, resourceID string) (types.AccessToken, error) {
+func (m *MockManagedIdentityTokenRetriever) AcquireARMToken(ctx context.Context, log logr.Logger, clientID, resourceID string) (types.AccessToken, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireARMToken", ctx, clientID, resourceID)
+	ret := m.ctrl.Call(m, "AcquireARMToken", ctx, log, clientID, resourceID)
 	ret0, _ := ret[0].(types.AccessToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AcquireARMToken indicates an expected call of AcquireARMToken.
-func (mr *MockManagedIdentityTokenRetrieverMockRecorder) AcquireARMToken(ctx, clientID, resourceID any) *gomock.Call {
+func (mr *MockManagedIdentityTokenRetrieverMockRecorder) AcquireARMToken(ctx, log, clientID, resourceID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireARMToken", reflect.TypeOf((*MockManagedIdentityTokenRetriever)(nil).AcquireARMToken), ctx, clientID, resourceID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireARMToken", reflect.TypeOf((*MockManagedIdentityTokenRetriever)(nil).AcquireARMToken), ctx, log, clientID, resourceID)
 }
 
 // MockACRTokenExchanger is a mock of ACRTokenExchanger interface.
@@ -132,16 +133,16 @@ func (m *MockACRTokenExchanger) EXPECT() *MockACRTokenExchangerMockRecorder {
 }
 
 // ExchangeACRAccessToken mocks base method.
-func (m *MockACRTokenExchanger) ExchangeACRAccessToken(ctx context.Context, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
+func (m *MockACRTokenExchanger) ExchangeACRAccessToken(ctx context.Context, log logr.Logger, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExchangeACRAccessToken", ctx, armToken, acrFQDN)
+	ret := m.ctrl.Call(m, "ExchangeACRAccessToken", ctx, log, armToken, acrFQDN)
 	ret0, _ := ret[0].(types.AccessToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ExchangeACRAccessToken indicates an expected call of ExchangeACRAccessToken.
-func (mr *MockACRTokenExchangerMockRecorder) ExchangeACRAccessToken(ctx, armToken, acrFQDN any) *gomock.Call {
+func (mr *MockACRTokenExchangerMockRecorder) ExchangeACRAccessToken(ctx, log, armToken, acrFQDN any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeACRAccessToken", reflect.TypeOf((*MockACRTokenExchanger)(nil).ExchangeACRAccessToken), ctx, armToken, acrFQDN)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeACRAccessToken", reflect.TypeOf((*MockACRTokenExchanger)(nil).ExchangeACRAccessToken), ctx, log, armToken, acrFQDN)
 }

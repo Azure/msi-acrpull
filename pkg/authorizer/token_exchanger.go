@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
+	"github.com/go-logr/logr"
 )
 
 // TokenExchanger is an instance of ACRTokenExchanger
@@ -28,7 +29,7 @@ func NewTokenExchanger() *TokenExchanger {
 }
 
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
-func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
+func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, log logr.Logger, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
 	tenantID, err := armToken.GetTokenTenantId()
 	if err != nil {
 		return "", fmt.Errorf("failed to get tenant id from ARM token: %w", err)
@@ -59,7 +60,13 @@ func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, armToken t
 	req.Header.Add("Content-Length", strconv.Itoa(len(parameters.Encode())))
 
 	var resp *http.Response
-	defer closeResponse(resp)
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			if err := resp.Body.Close(); err != nil {
+				log.Error(err, "failed to close response body")
+			}
+		}
+	}()
 
 	resp, err = te.client.Do(req)
 	if err != nil {
@@ -67,11 +74,11 @@ func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, armToken t
 	}
 
 	if resp.StatusCode != 200 {
-		responseBytes, _ := ioutil.ReadAll(resp.Body)
+		responseBytes, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("ACR token exchange endpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
 	}
 
-	responseBytes, err := ioutil.ReadAll(resp.Body)
+	responseBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read request body: %w", err)
 	}
