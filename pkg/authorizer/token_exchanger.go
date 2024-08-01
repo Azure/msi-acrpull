@@ -30,11 +30,6 @@ func NewTokenExchanger() *TokenExchanger {
 
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
 func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, log logr.Logger, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
-	tenantID, err := armToken.GetTokenTenantId()
-	if err != nil {
-		return "", fmt.Errorf("failed to get tenant id from ARM token: %w", err)
-	}
-
 	scheme := te.acrServerScheme
 	if scheme == "" {
 		scheme = "https"
@@ -48,7 +43,6 @@ func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, log logr.L
 	parameters := url.Values{}
 	parameters.Add("grant_type", "access_token")
 	parameters.Add("service", ul.Hostname())
-	parameters.Add("tenant", tenantID)
 	parameters.Add("access_token", string(armToken))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", exchangeURL, strings.NewReader(parameters.Encode()))

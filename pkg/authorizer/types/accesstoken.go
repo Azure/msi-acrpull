@@ -10,24 +10,6 @@ import (
 
 type AccessToken string
 
-func (t AccessToken) GetTokenTenantId() (string, error) {
-	claims, err := t.GetTokenClaims()
-	if err != nil {
-		return "", err
-	}
-	tenantID, ok := claims["tid"].(string)
-	if ok {
-		return tenantID, nil
-	}
-
-	tenantID, ok = claims["tenant"].(string)
-	if ok {
-		return tenantID, nil
-	}
-
-	return "", fmt.Errorf("token has no tenant ID")
-}
-
 func (t AccessToken) GetTokenClaims() (jwt.MapClaims, error) {
 	p := &jwt.Parser{}
 	skipValidations := jwt.WithoutClaimsValidation()

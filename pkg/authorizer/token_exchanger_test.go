@@ -41,7 +41,6 @@ var _ = Describe("Token Exchanger Tests", func() {
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/oauth2/exchange"),
 					ghttp.VerifyContentType("application/x-www-form-urlencoded"),
-					ghttp.VerifyFormKV("tenant", testTenantID),
 					ghttp.VerifyFormKV("service", ul.Hostname()),
 					ghttp.VerifyFormKV("grant_type", "access_token"),
 					ghttp.VerifyFormKV("access_token", string(armToken)),
@@ -67,7 +66,6 @@ var _ = Describe("Token Exchanger Tests", func() {
 				ghttp.CombineHandlers(
 					ghttp.VerifyRequest("POST", "/oauth2/exchange"),
 					ghttp.VerifyContentType("application/x-www-form-urlencoded"),
-					ghttp.VerifyFormKV("tenant", testTenantID),
 					ghttp.VerifyFormKV("service", ul.Hostname()),
 					ghttp.VerifyFormKV("grant_type", "access_token"),
 					ghttp.VerifyFormKV("access_token", string(armToken)),
