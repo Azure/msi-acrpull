@@ -86,7 +86,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test",
 					Namespace:  "default",
-					Finalizers: []string{},
+					Finalizers: []string{"msi-acrpull.microsoft.com"},
 				},
 			}
 			err := reconciler.Create(context.TODO(), acrBinding)
@@ -174,7 +174,8 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			}
 			log := reconciler.Log.WithValues("acrpullbinding", "default")
 			ctx := context.Background()
-			err := reconciler.addFinalizer(ctx, acrBinding, log)
+			updated, err := reconciler.addFinalizer(ctx, acrBinding, log)
+			Expect(updated).To(BeTrue())
 			Expect(err).To(BeNil())
 			Expect(acrBinding.Finalizers).To(HaveLen(1))
 			Expect(acrBinding.Finalizers[0]).To(Equal("msi-acrpull.microsoft.com"))

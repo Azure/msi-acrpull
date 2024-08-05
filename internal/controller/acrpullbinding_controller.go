@@ -68,7 +68,7 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if acrBinding.ObjectMeta.DeletionTimestamp.IsZero() {
 		// the object is not being deleted, so if it does not have our finalizer,
 		// then need to add the finalizer and update the object.
-		if err := r.addFinalizer(ctx, &acrBinding, log); err != nil {
+		if updated, err := r.addFinalizer(ctx, &acrBinding, log); updated {
 			return ctrl.Result{}, err
 		}
 	} else {
@@ -188,15 +188,17 @@ func (r *AcrPullBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, log logr.Logger) error {
+func (r *AcrPullBindingReconciler) addFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, log logr.Logger) (bool, error) {
+	var updated bool
 	if !slices.Contains(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
+		updated = true
 		acrBinding.ObjectMeta.Finalizers = append(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
 		if err := r.Update(ctx, acrBinding); err != nil {
 			log.Error(err, "Failed to append acr pull binding finalizer", "finalizerName", msiAcrPullFinalizerName)
-			return err
+			return updated, err
 		}
 	}
-	return nil
+	return updated, nil
 }
 
 func (r *AcrPullBindingReconciler) removeFinalizer(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding,
