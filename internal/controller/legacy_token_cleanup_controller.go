@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	serviceAccountField = ".spec.serviceAccountName"
+	serviceAccountField   = ".spec.serviceAccountName"
+	imagePullSecretsField = ".imagePullSecrets"
 )
 
 type LegacyTokenCleanupController struct {

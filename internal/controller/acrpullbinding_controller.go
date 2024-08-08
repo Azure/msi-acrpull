@@ -87,10 +87,11 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
+	expectedPullSecretName := pullSecretName(acrBinding.Name)
 	pullSecret := &corev1.Secret{}
 	if err := r.Get(ctx, k8stypes.NamespacedName{
 		Namespace: req.Namespace,
-		Name:      pullSecretName(acrBinding.Name),
+		Name:      expectedPullSecretName,
 	}, pullSecret); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get pull secret")
@@ -98,12 +99,18 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
-	action := r.reconcile(ctx, log, acrBinding, serviceAccount, pullSecret)
+	var referencingServiceAccounts corev1.ServiceAccountList
+	if err := r.List(ctx, &referencingServiceAccounts, client.InNamespace(acrBinding.GetNamespace()), client.MatchingFields{imagePullSecretsField: expectedPullSecretName}); err != nil {
+		log.Error(err, "failed to fetch service accounts referencing pull secret")
+		return ctrl.Result{}, err
+	}
+
+	action := r.reconcile(ctx, log, acrBinding, serviceAccount, pullSecret, referencingServiceAccounts.Items)
 
 	return r.execute(ctx, action)
 }
 
-func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logger, acrBinding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount, pullSecret *corev1.Secret) *action {
+func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logger, acrBinding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount, pullSecret *corev1.Secret, referencingServiceAccounts []corev1.ServiceAccount) *action {
 	// examine DeletionTimestamp to determine if acr pull binding is under deletion
 	if acrBinding.ObjectMeta.DeletionTimestamp.IsZero() {
 		// the object is not being deleted, so if it does not have our finalizer,
@@ -117,6 +124,22 @@ func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logge
 	} else {
 		// the object is being deleted, do cleanup as necessary
 		return r.cleanUp(acrBinding, serviceAccount, pullSecret, log)
+	}
+
+	// if the user changed which service account should be bound to this credential, we need to
+	// un-bind the credential from any service accounts it was bound to previously
+	extraneousServiceAccounts := slices.DeleteFunc(referencingServiceAccounts, func(other corev1.ServiceAccount) bool {
+		return serviceAccount != nil && other.Name == serviceAccount.Name
+	})
+	for _, extraneous := range extraneousServiceAccounts {
+		updated := extraneous.DeepCopy()
+		updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
+			return reference.Name == pullSecretName(acrBinding.ObjectMeta.Name)
+		})
+		if len(updated.ImagePullSecrets) != len(extraneous.ImagePullSecrets) {
+			log.WithValues("serviceAccount", client.ObjectKeyFromObject(&extraneous).String()).Info("updating service account to remove image pull secret")
+			return &action{updateServiceAccount: updated}
+		}
 	}
 
 	if serviceAccount == nil {
@@ -309,6 +332,23 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	}); err != nil {
 		return err
 	}
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ServiceAccount{}, imagePullSecretsField, func(object client.Object) []string {
+		serviceAccount, ok := object.(*corev1.ServiceAccount)
+		if !ok {
+			return nil
+		}
+
+		var imagePullSecrets []string
+		for _, secretRef := range serviceAccount.ImagePullSecrets {
+			if strings.HasPrefix(secretRef.Name, pullSecretNamePrefix) {
+				imagePullSecrets = append(imagePullSecrets, secretRef.Name)
+			}
+		}
+
+		return imagePullSecrets
+	}); err != nil {
+		return err
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&msiacrpullv1beta1.AcrPullBinding{}).
@@ -421,7 +461,10 @@ func base36sha224(input []byte) string {
 	return i.Text(36)
 }
 
-const maxNameLength = 64 /* longest object name */ - 10 /* length of static content */ - 10 /* length of hash */
+const (
+	maxNameLength        = 64 /* longest object name */ - 10 /* length of static content */ - 10 /* length of hash */
+	pullSecretNamePrefix = "acr-pull-"
+)
 
 func pullSecretName(acrBindingName string) string {
 	suffix := acrBindingName
@@ -429,7 +472,7 @@ func pullSecretName(acrBindingName string) string {
 		suffix = suffix[:maxNameLength]
 	}
 	suffix = strings.TrimSuffix(suffix, ".") // trailing domain label separators can't be followed by '-'
-	return fmt.Sprintf("acr-pull-%s-%s", suffix, base36sha224([]byte(acrBindingName))[:10])
+	return pullSecretNamePrefix + suffix + "-" + base36sha224([]byte(acrBindingName))[:10]
 }
 
 func legacySecretName(acrBindingName string) string {
