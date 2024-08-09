@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/mock_authorizer"
 	"github.com/golang-jwt/jwt/v5"
 	. "github.com/onsi/ginkgo/v2"
@@ -24,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 type errorFakeCtrlRuntimeClient struct {
@@ -78,7 +78,6 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 			}
 			fakeAuth.EXPECT().AcquireACRAccessTokenWithResourceID(
 				context.Background(),
-				gomock.Any(),
 				gomock.Eq(reconciler.DefaultManagedIdentityResourceID),
 				gomock.Eq(reconciler.DefaultACRServer)).Times(1)
 
@@ -125,7 +124,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 
 	Context("getTokenRefreshDuration", func() {
 		It("Should return 0 for negative durations", func() {
-			token, err := getTestToken(time.Now().Add(-time.Hour).Unix())
+			token, err := getTestToken(time.Now().Add(-time.Hour))
 			Expect(err).ToNot(HaveOccurred())
 
 			refreshDuration := getTokenRefreshDuration(token)
@@ -133,7 +132,7 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 		})
 
 		It("Should return positive duration when exp is outside refresh buffer", func() {
-			exp := time.Now().Add(tokenRefreshBuffer + time.Hour).Unix()
+			exp := time.Now().Add(tokenRefreshBuffer + time.Hour)
 
 			token, err := getTestToken(exp)
 			Expect(err).ToNot(HaveOccurred())
@@ -341,13 +340,13 @@ var _ = Describe("AcrPullBinding Controller Tests", func() {
 	})
 })
 
-func getTestToken(exp int64) (types.AccessToken, error) {
+func getTestToken(exp time.Time) (azcore.AccessToken, error) {
 	signingKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	Expect(err).ToNot(HaveOccurred())
 
 	claims := jwt.MapClaims{
 		"aud":        "test.azurecr.io",
-		"exp":        exp,
+		"exp":        exp.Unix(),
 		"grant_type": "refresh_token",
 		"iat":        time.Now().AddDate(0, 0, -2).Unix(),
 		"version":    1.0,
@@ -362,8 +361,11 @@ func getTestToken(exp int64) (types.AccessToken, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	tokenString, err := token.SignedString(signingKey)
 	if err != nil {
-		return "", err
+		return azcore.AccessToken{}, err
 	}
 
-	return types.AccessToken(tokenString), nil
+	return azcore.AccessToken{
+		Token:     tokenString,
+		ExpiresOn: exp,
+	}, nil
 }

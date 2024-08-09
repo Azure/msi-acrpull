@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -20,7 +21,6 @@ import (
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 const (
@@ -82,13 +82,13 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	msiClientID, msiResourceID, acrServer := specOrDefault(r, acrBinding.Spec)
-	var acrAccessToken types.AccessToken
+	var acrAccessToken azcore.AccessToken
 	var err error
 
 	if msiClientID != "" {
-		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithClientID(ctx, log, msiClientID, acrServer)
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithClientID(ctx, msiClientID, acrServer)
 	} else {
-		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithResourceID(ctx, log, msiResourceID, acrServer)
+		acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithResourceID(ctx, msiResourceID, acrServer)
 	}
 	if err != nil {
 		log.Error(err, "Failed to get ACR access token")
@@ -99,7 +99,11 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	dockerConfig := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
+	dockerConfig, err := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
+	if err != nil {
+		log.Error(err, "unable to create DockerConfig")
+		return ctrl.Result{}, err
+	}
 
 	var pullSecrets v1.SecretList
 	if err := r.List(ctx, &pullSecrets, client.InNamespace(req.Namespace), client.MatchingFields{ownerKey: req.Name}); err != nil {
@@ -262,14 +266,9 @@ func (r *AcrPullBindingReconciler) updateServiceAccount(ctx context.Context, acr
 	return nil
 }
 
-func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken types.AccessToken) error {
-	tokenExp, err := accessToken.GetTokenExp()
-	if err != nil {
-		return err
-	}
-
+func (r *AcrPullBindingReconciler) setSuccessStatus(ctx context.Context, acrBinding *msiacrpullv1beta1.AcrPullBinding, accessToken azcore.AccessToken) error {
 	acrBinding.Status = msiacrpullv1beta1.AcrPullBindingStatus{
-		TokenExpirationTime:  &metav1.Time{Time: tokenExp},
+		TokenExpirationTime:  &metav1.Time{Time: accessToken.ExpiresOn},
 		LastTokenRefreshTime: &metav1.Time{Time: time.Now().UTC()},
 	}
 
@@ -351,13 +350,8 @@ func newBasePullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
 	return pullSecret, nil
 }
 
-func getTokenRefreshDuration(accessToken types.AccessToken) time.Duration {
-	exp, err := accessToken.GetTokenExp()
-	if err != nil {
-		return 0
-	}
-
-	refreshDuration := exp.Sub(time.Now().Add(tokenRefreshBuffer))
+func getTokenRefreshDuration(accessToken azcore.AccessToken) time.Duration {
+	refreshDuration := accessToken.ExpiresOn.Sub(time.Now().Add(tokenRefreshBuffer))
 	if refreshDuration < 0 {
 		return 0
 	}
