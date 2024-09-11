@@ -125,7 +125,7 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	} else {
 		log.Info("Updating existing pull secret")
 
-		pullSecret := updatePullSecret(&pullSecrets.Items[0], dockerConfig)
+		pullSecret := updatePullSecret(pullSecret, dockerConfig)
 		if err := r.Update(ctx, pullSecret); err != nil {
 			log.Error(err, "Failed to update pull secret")
 			return ctrl.Result{}, err
