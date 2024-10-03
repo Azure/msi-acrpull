@@ -176,15 +176,15 @@ spec:
   selector:
     matchLabels:
       control-plane: controller-manager
-  securityContext:
-    runAsNonRoot: true
-    seccompProfile:
-      type: RuntimeDefault
   template:
     metadata:
       labels:
         control-plane: controller-manager
     spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - args:
         - --metrics-addr=127.0.0.1:8080
