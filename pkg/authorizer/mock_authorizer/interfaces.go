@@ -13,8 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	types "github.com/Azure/msi-acrpull/pkg/authorizer/types"
-	logr "github.com/go-logr/logr"
+	azcore "github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -42,107 +41,31 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AcquireACRAccessTokenWithClientID mocks base method.
-func (m *MockInterface) AcquireACRAccessTokenWithClientID(ctx context.Context, log logr.Logger, clientID, acrFQDN string) (types.AccessToken, error) {
+func (m *MockInterface) AcquireACRAccessTokenWithClientID(ctx context.Context, clientID, acrFQDN string) (azcore.AccessToken, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithClientID", ctx, log, clientID, acrFQDN)
-	ret0, _ := ret[0].(types.AccessToken)
+	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithClientID", ctx, clientID, acrFQDN)
+	ret0, _ := ret[0].(azcore.AccessToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AcquireACRAccessTokenWithClientID indicates an expected call of AcquireACRAccessTokenWithClientID.
-func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithClientID(ctx, log, clientID, acrFQDN any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithClientID(ctx, clientID, acrFQDN any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithClientID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithClientID), ctx, log, clientID, acrFQDN)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithClientID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithClientID), ctx, clientID, acrFQDN)
 }
 
 // AcquireACRAccessTokenWithResourceID mocks base method.
-func (m *MockInterface) AcquireACRAccessTokenWithResourceID(ctx context.Context, log logr.Logger, identityResourceID, acrFQDN string) (types.AccessToken, error) {
+func (m *MockInterface) AcquireACRAccessTokenWithResourceID(ctx context.Context, identityResourceID, acrFQDN string) (azcore.AccessToken, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithResourceID", ctx, log, identityResourceID, acrFQDN)
-	ret0, _ := ret[0].(types.AccessToken)
+	ret := m.ctrl.Call(m, "AcquireACRAccessTokenWithResourceID", ctx, identityResourceID, acrFQDN)
+	ret0, _ := ret[0].(azcore.AccessToken)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AcquireACRAccessTokenWithResourceID indicates an expected call of AcquireACRAccessTokenWithResourceID.
-func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithResourceID(ctx, log, identityResourceID, acrFQDN any) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) AcquireACRAccessTokenWithResourceID(ctx, identityResourceID, acrFQDN any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithResourceID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithResourceID), ctx, log, identityResourceID, acrFQDN)
-}
-
-// MockManagedIdentityTokenRetriever is a mock of ManagedIdentityTokenRetriever interface.
-type MockManagedIdentityTokenRetriever struct {
-	ctrl     *gomock.Controller
-	recorder *MockManagedIdentityTokenRetrieverMockRecorder
-}
-
-// MockManagedIdentityTokenRetrieverMockRecorder is the mock recorder for MockManagedIdentityTokenRetriever.
-type MockManagedIdentityTokenRetrieverMockRecorder struct {
-	mock *MockManagedIdentityTokenRetriever
-}
-
-// NewMockManagedIdentityTokenRetriever creates a new mock instance.
-func NewMockManagedIdentityTokenRetriever(ctrl *gomock.Controller) *MockManagedIdentityTokenRetriever {
-	mock := &MockManagedIdentityTokenRetriever{ctrl: ctrl}
-	mock.recorder = &MockManagedIdentityTokenRetrieverMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockManagedIdentityTokenRetriever) EXPECT() *MockManagedIdentityTokenRetrieverMockRecorder {
-	return m.recorder
-}
-
-// AcquireARMToken mocks base method.
-func (m *MockManagedIdentityTokenRetriever) AcquireARMToken(ctx context.Context, log logr.Logger, clientID, resourceID string) (types.AccessToken, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireARMToken", ctx, log, clientID, resourceID)
-	ret0, _ := ret[0].(types.AccessToken)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// AcquireARMToken indicates an expected call of AcquireARMToken.
-func (mr *MockManagedIdentityTokenRetrieverMockRecorder) AcquireARMToken(ctx, log, clientID, resourceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireARMToken", reflect.TypeOf((*MockManagedIdentityTokenRetriever)(nil).AcquireARMToken), ctx, log, clientID, resourceID)
-}
-
-// MockACRTokenExchanger is a mock of ACRTokenExchanger interface.
-type MockACRTokenExchanger struct {
-	ctrl     *gomock.Controller
-	recorder *MockACRTokenExchangerMockRecorder
-}
-
-// MockACRTokenExchangerMockRecorder is the mock recorder for MockACRTokenExchanger.
-type MockACRTokenExchangerMockRecorder struct {
-	mock *MockACRTokenExchanger
-}
-
-// NewMockACRTokenExchanger creates a new mock instance.
-func NewMockACRTokenExchanger(ctrl *gomock.Controller) *MockACRTokenExchanger {
-	mock := &MockACRTokenExchanger{ctrl: ctrl}
-	mock.recorder = &MockACRTokenExchangerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockACRTokenExchanger) EXPECT() *MockACRTokenExchangerMockRecorder {
-	return m.recorder
-}
-
-// ExchangeACRAccessToken mocks base method.
-func (m *MockACRTokenExchanger) ExchangeACRAccessToken(ctx context.Context, log logr.Logger, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExchangeACRAccessToken", ctx, log, armToken, acrFQDN)
-	ret0, _ := ret[0].(types.AccessToken)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ExchangeACRAccessToken indicates an expected call of ExchangeACRAccessToken.
-func (mr *MockACRTokenExchangerMockRecorder) ExchangeACRAccessToken(ctx, log, armToken, acrFQDN any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExchangeACRAccessToken", reflect.TypeOf((*MockACRTokenExchanger)(nil).ExchangeACRAccessToken), ctx, log, armToken, acrFQDN)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireACRAccessTokenWithResourceID", reflect.TypeOf((*MockInterface)(nil).AcquireACRAccessTokenWithResourceID), ctx, identityResourceID, acrFQDN)
 }
