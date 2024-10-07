@@ -54,10 +54,10 @@ func (t AccessToken) GetTokenExp() (time.Time, error) {
 
 	switch exp := claims["exp"].(type) {
 	case float64:
-		return time.Unix(int64(exp), 0), nil
+		return time.Unix(int64(exp), 0).UTC(), nil
 	case json.Number:
 		timestamp, _ := exp.Int64()
-		return time.Unix(timestamp, 0), nil
+		return time.Unix(timestamp, 0).UTC(), nil
 	default:
 		return time.Time{}, fmt.Errorf("failed to parse token experation")
 	}
