@@ -1,4 +1,2 @@
-## Append samples of your project ##
 resources:
 - msi-acrpull_v1beta1_acrpullbinding.yaml
-#+kubebuilder:scaffold:manifestskustomizesamples
