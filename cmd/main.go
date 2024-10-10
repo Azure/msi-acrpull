@@ -2,12 +2,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/Azure/msi-acrpull/internal/controller"
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -86,10 +88,16 @@ func main() {
 	// informers to only the set of secrets we create and manage
 	var cacheOpts cache.Options
 	if !cleanupRequired {
+		setupLog.Info(fmt.Sprintf("filtering Secret informers for label %s", controller.ACRPullBindingLabel))
+		requirement, err := labels.NewRequirement(controller.ACRPullBindingLabel, selection.Exists, []string{})
+		if err != nil {
+			setupLog.Error(err, "unable to create label selector")
+			os.Exit(1)
+		}
 		cacheOpts = cache.Options{
 			ByObject: map[crclient.Object]cache.ByObject{
 				&corev1.Secret{}: {
-					Label: labels.SelectorFromSet(labels.Set{controller.ACRPullBindingLabel: ""}),
+					Label: labels.NewSelector().Add(*requirement),
 				},
 			},
 		}

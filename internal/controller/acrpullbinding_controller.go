@@ -84,6 +84,8 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get service account")
 			return ctrl.Result{}, err
+		} else {
+			serviceAccount = nil
 		}
 	}
 
@@ -96,6 +98,8 @@ func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get pull secret")
 			return ctrl.Result{}, err
+		} else {
+			pullSecret = nil
 		}
 	}
 
@@ -305,22 +309,6 @@ func pullSecretExpiry(log logr.Logger, secret *corev1.Secret) time.Time {
 func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if r.now == nil {
 		r.now = time.Now
-	}
-
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Secret{}, ownerKey, func(rawObj client.Object) []string {
-		secret := rawObj.(*corev1.Secret)
-		owner := metav1.GetControllerOf(secret)
-		if owner == nil {
-			return nil
-		}
-
-		if owner.APIVersion != msiacrpullv1beta1.GroupVersion.String() || owner.Kind != "AcrPullBinding" {
-			return nil
-		}
-
-		return []string{owner.Name}
-	}); err != nil {
-		return err
 	}
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &msiacrpullv1beta1.AcrPullBinding{}, serviceAccountField, func(object client.Object) []string {
 		acrPullBinding, ok := object.(*msiacrpullv1beta1.AcrPullBinding)
