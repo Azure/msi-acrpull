@@ -79,4 +79,4 @@ test: deploy mirror-images
 
 .PHONY: test-e2e
 test-e2e:
-	ALICE_IMAGE="$(shell cat _output/alice )" BOB_IMAGE="$(shell cat _output/bob )" KUBECONFIG="_output/aks.kubeconfig" ACR_FQDN="$(shell jq --raw-output '.properties.outputs.acr.value.registryName.value' < _output/acr-infrastructure.json).azurecr.io" PULLER_ID="$(shell jq --raw-output '.properties.outputs.acr.value.pullerIdentity.value' < _output/acr-infrastructure.json )" LABEL_SELECTOR="agentpool=user" go test -v ./
+	ALICE_IMAGE="$(shell cat _output/alice )" BOB_IMAGE="$(shell cat _output/bob )" KUBECONFIG="_output/aks.kubeconfig" ACR_FQDN="$(shell jq --raw-output '.properties.outputs.acr.value.registryName.value' < _output/acr-infrastructure.json).azurecr.io" PULLER_ID="$(shell jq --raw-output '.properties.outputs.acr.value.pullerIdentity.value' < _output/acr-infrastructure.json )" LABEL_SELECTOR="agentpool=user" go test -v -tags e2e ./

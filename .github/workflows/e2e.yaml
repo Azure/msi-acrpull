@@ -1,0 +1,44 @@
+name: Azure Workload Identity E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - release-**
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  msi_acrpull_e2e:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        with:
+          egress-policy: audit
+      - name: Checkout
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+        with:
+          fetch-depth: 0
+      - name: Set up Golang
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        with:
+          go-version: "1.22.4"
+          check-latest: true
+      - name: Azure CLI
+        run: |
+          echo "Azure CLI Current installed version"
+          az version
+      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: E2E test
+        run: make -C test/ test
+      - name: Cleanup
+        if: ${{ always() }}
+        run: make -C test/ cleanup
