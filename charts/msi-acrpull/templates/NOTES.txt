@@ -1,0 +1,7 @@
+You have successfully installed MSI ACR Pull in your Kubernetes cluster!
+
+To verify that MSI ACR Pull has started run:
+
+kubectl --namespace={{ .Release.Namespace }} get pods -l "app.kubernetes.io/name={{ include "charts.name" . }}"
+
+Now you can have fun with MSI ACR Pull: https://github.com/Azure/msi-acrpull

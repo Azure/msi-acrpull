@@ -1,0 +1,11 @@
+apiVersion: v1
+description: Deploy components for msi-acrpull
+name: msi-acrpull
+version: v0.1.0-alpha
+appVersion: v0.1.0-alpha
+home: https://github.com/Azure/msi-acrpull
+sources:
+  - https://github.com/Azure/msi-acrpull
+maintainers:
+  - name: dmakeroam
+    email: sirinat@kubeops.guru
