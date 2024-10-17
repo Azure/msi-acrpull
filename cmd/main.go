@@ -2,10 +2,16 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/Azure/msi-acrpull/internal/controller"
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -56,9 +62,50 @@ func main() {
 	defaultManagedIdentityClientID := os.Getenv(defaultManagedIdentityClientIDEnvKey)
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	cfg := ctrl.GetConfigOrDie()
+	ctx := ctrl.SetupSignalHandler()
+	client, err := crclient.New(cfg, crclient.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "unable to create client")
+		os.Exit(1)
+	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	var pullBindings msiacrpullv1beta1.AcrPullBindingList
+	if err := client.List(ctx, &pullBindings); err != nil {
+		setupLog.Error(err, "unable to fetch ACRPullBindings")
+		os.Exit(1)
+	}
+
+	var secrets corev1.SecretList
+	if err := client.List(ctx, &secrets); err != nil {
+		setupLog.Error(err, "unable to fetch Secrets")
+		os.Exit(1)
+	}
+
+	cleanupRequired := controller.LegacyPullSecretsPresent(pullBindings, secrets)
+
+	// when we've already cleaned up all legacy secrets, we can filter our
+	// informers to only the set of secrets we create and manage
+	var cacheOpts cache.Options
+	if !cleanupRequired {
+		setupLog.Info(fmt.Sprintf("filtering Secret informers for label %s", controller.ACRPullBindingLabel))
+		requirement, err := labels.NewRequirement(controller.ACRPullBindingLabel, selection.Exists, []string{})
+		if err != nil {
+			setupLog.Error(err, "unable to create label selector")
+			os.Exit(1)
+		}
+		cacheOpts = cache.Options{
+			ByObject: map[crclient.Object]cache.ByObject{
+				&corev1.Secret{}: {
+					Label: labels.NewSelector().Add(*requirement),
+				},
+			},
+		}
+	}
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme,
+		Cache:                  cacheOpts,
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
@@ -78,9 +125,20 @@ func main() {
 		DefaultManagedIdentityResourceID: defaultManagedIdentityResourceID,
 		DefaultManagedIdentityClientID:   defaultManagedIdentityClientID,
 	}
-	if err = apbReconciler.SetupWithManager(mgr); err != nil {
+	if err := apbReconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBinding")
 		os.Exit(1)
+	}
+
+	if cleanupRequired {
+		cleanupController := &controller.LegacyTokenCleanupController{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("LegacyTokenCleanup"),
+		}
+		if err := cleanupController.SetupWithManager(ctx, mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "LegacyTokenCleanup")
+			os.Exit(1)
+		}
 	}
 	//+kubebuilder:scaffold:builder
 
@@ -94,7 +152,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}

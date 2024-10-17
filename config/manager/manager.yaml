@@ -46,10 +46,16 @@ spec:
         image: controller:latest
         name: manager
         securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - "ALL"
+          readOnlyRootFilesystem: true
+          runAsUser: 1000
+          runAsGroup: 3000
         livenessProbe:
           httpGet:
             path: /healthz
@@ -71,3 +77,12 @@ spec:
             memory: 20Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: agentpool
+                    operator: In
+                    values:
+                      - system
