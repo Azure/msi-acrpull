@@ -3,17 +3,23 @@ include ./../.bingo/Variables.mk
 UNIQUE_INPUT ?= ${USER}-test-dev
 LOCATION ?= EastUS
 
-_output/acr-deployment:
+_output:
+	mkdir _output
+
+_output/acr-deployment: _output
 	echo "$(UNIQUE_INPUT)-acr" > _output/acr-deployment
 
 _output/acr-infrastructure.json: _output/acr-deployment
 	az deployment sub create --name "$(shell cat _output/acr-deployment )" --location "$(LOCATION)" --template-file "./infrastructure/acr.resourceGroup.bicep" --parameters "location=$(LOCATION)" --parameters "uniqueIdentifier=$(UNIQUE_INPUT)" --output "json" > _output/acr-infrastructure.json
 
-_output/aks-deployment:
+_output/aks-deployment: _output
 	echo "$(UNIQUE_INPUT)-aks" > _output/aks-deployment
 
 _output/aks-infrastructure.json: _output/aks-deployment
 	az deployment sub create --name "$(shell cat _output/aks-deployment )" --location "$(LOCATION)" --template-file "./infrastructure/aks.resourceGroup.bicep" --parameters "location=$(LOCATION)" --parameters "uniqueIdentifier=$(UNIQUE_INPUT)" --output "json" > _output/aks-infrastructure.json
+
+_output/identity.json: _output
+	az deployment sub create --name msi-acrpull-e2e-test-runner --template-file "./infrastructure/identity.resourceGroup.bicep" --parameters "location=$(LOCATION)" --output json --location "$(LOCATION)" > _output/identity.json
 
 .PHONY: cleanup-resource-group
 cleanup-resource-group:
