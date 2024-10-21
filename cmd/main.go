@@ -131,6 +131,7 @@ func main() {
 	}
 
 	if cleanupRequired {
+		setupLog.Info("setting up controller to clean up legacy pull tokens")
 		cleanupController := &controller.LegacyTokenCleanupController{
 			Client: mgr.GetClient(),
 			Log:    ctrl.Log.WithName("controllers").WithName("LegacyTokenCleanup"),

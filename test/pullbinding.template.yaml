@@ -1,0 +1,8 @@
+apiVersion: msi-acrpull.microsoft.com/v1beta1
+kind: AcrPullBinding
+metadata:
+  name: previous-pull-binding
+  namespace: default
+spec:
+  managedIdentityResourceID: "MANAGED_IDENTITY_RESOURCE_ID"
+  acrServer: "ACR_SERVER"

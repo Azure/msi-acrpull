@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
+	"github.com/Azure/msi-acrpull/pkg/authorizer"
+	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,11 +22,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
-	"github.com/Azure/msi-acrpull/pkg/authorizer"
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 const (
@@ -170,6 +168,7 @@ func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logge
 		if err != nil {
 			updated := acrBinding.DeepCopy()
 			updated.Status.Error = fmt.Sprintf("failed to retrieve ACR access token: %v", err)
+			log.Info(updated.Status.Error)
 			return &action{updatePullBindingStatus: updated}
 		}
 
@@ -179,6 +178,7 @@ func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logge
 		if err != nil {
 			updated := acrBinding.DeepCopy()
 			updated.Status.Error = fmt.Sprintf("failed to retrieve ACR access token expiry: %v", err)
+			log.Info(updated.Status.Error)
 			return &action{updatePullBindingStatus: updated}
 		}
 		newSecret := newPullSecret(acrBinding, dockerConfig, r.Scheme, tokenExp, r.now, inputHash)
@@ -310,14 +310,7 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	if r.now == nil {
 		r.now = time.Now
 	}
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &msiacrpullv1beta1.AcrPullBinding{}, serviceAccountField, func(object client.Object) []string {
-		acrPullBinding, ok := object.(*msiacrpullv1beta1.AcrPullBinding)
-		if !ok {
-			return nil
-		}
-
-		return []string{getServiceAccountName(acrPullBinding.Spec.ServiceAccountName)}
-	}); err != nil {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &msiacrpullv1beta1.AcrPullBinding{}, serviceAccountField, indexPullBindingByServiceAccount); err != nil {
 		return err
 	}
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ServiceAccount{}, imagePullSecretsField, func(object client.Object) []string {
@@ -340,20 +333,9 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&msiacrpullv1beta1.AcrPullBinding{}).
+		Named("acr-pull-binding").
 		Owns(&corev1.Secret{}).
-		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []reconcile.Request {
-			var pullBindings msiacrpullv1beta1.AcrPullBindingList
-			if err := mgr.GetClient().List(ctx, &pullBindings, client.InNamespace(object.GetNamespace()), client.MatchingFields{serviceAccountField: object.GetName()}); err != nil {
-				return nil
-			}
-			var requests []reconcile.Request
-			for _, pullBinding := range pullBindings.Items {
-				requests = append(requests, reconcile.Request{
-					NamespacedName: client.ObjectKeyFromObject(&pullBinding),
-				})
-			}
-			return requests
-		})).
+		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).
 		Complete(r)
 }
 
