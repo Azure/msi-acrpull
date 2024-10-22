@@ -24,38 +24,42 @@ const (
 	imagePullSecretsField = ".imagePullSecrets"
 )
 
+func indexPullBindingByServiceAccount(object client.Object) []string {
+	acrPullBinding, ok := object.(*msiacrpullv1beta1.AcrPullBinding)
+	if !ok {
+		return nil
+	}
+
+	return []string{getServiceAccountName(acrPullBinding.Spec.ServiceAccountName)}
+}
+
+func enqueuePullBindingsForServiceAccount(mgr ctrl.Manager) func(ctx context.Context, object client.Object) []reconcile.Request {
+	return func(ctx context.Context, object client.Object) []reconcile.Request {
+		var pullBindings msiacrpullv1beta1.AcrPullBindingList
+		if err := mgr.GetClient().List(ctx, &pullBindings, client.InNamespace(object.GetNamespace()), client.MatchingFields{serviceAccountField: object.GetName()}); err != nil {
+			return nil
+		}
+		var requests []reconcile.Request
+		for _, pullBinding := range pullBindings.Items {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKeyFromObject(&pullBinding),
+			})
+		}
+		return requests
+	}
+}
+
 type LegacyTokenCleanupController struct {
 	Client client.Client
 	Log    logr.Logger
 }
 
-func (c *LegacyTokenCleanupController) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &msiacrpullv1beta1.AcrPullBinding{}, serviceAccountField, func(object client.Object) []string {
-		acrPullBinding, ok := object.(*msiacrpullv1beta1.AcrPullBinding)
-		if !ok {
-			return nil
-		}
-
-		return []string{getServiceAccountName(acrPullBinding.Spec.ServiceAccountName)}
-	}); err != nil {
-		return err
-	}
-
+func (c *LegacyTokenCleanupController) SetupWithManager(_ context.Context, mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("legacy-token-cleanup").
 		For(&msiacrpullv1beta1.AcrPullBinding{}).
-		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []reconcile.Request {
-			var pullBindings msiacrpullv1beta1.AcrPullBindingList
-			if err := mgr.GetClient().List(ctx, &pullBindings, client.InNamespace(object.GetNamespace()), client.MatchingFields{serviceAccountField: object.GetName()}); err != nil {
-				return nil
-			}
-			var requests []reconcile.Request
-			for _, pullBinding := range pullBindings.Items {
-				requests = append(requests, reconcile.Request{
-					NamespacedName: client.ObjectKeyFromObject(&pullBinding),
-				})
-			}
-			return requests
-		})).
+		// n.b. the other controller always runs and sets up the indexer, so we can just use it
+		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).
 		Complete(c)
 }
 
@@ -93,6 +97,8 @@ func (c *LegacyTokenCleanupController) Reconcile(ctx context.Context, req ctrl.R
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get legacy secret")
 			return ctrl.Result{}, err
+		} else {
+			legacySecret = nil
 		}
 	}
 	action := c.reconcile(acrBinding, serviceAccount, legacySecret)
@@ -116,6 +122,7 @@ func (c *LegacyTokenCleanupController) reconcile(acrBinding *msiacrpullv1beta1.A
 		updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
 			return reference.Name == legacySecretName(acrBinding.ObjectMeta.Name)
 		})
+		c.Log.WithValues("serviceAccountNamespace", updated.Namespace, "serviceAccountName", updated.Name).Info("removing reference to legacy pull token secret from service account")
 		return &cleanupAction{updateServiceAccount: updated}
 	}
 
@@ -124,10 +131,12 @@ func (c *LegacyTokenCleanupController) reconcile(acrBinding *msiacrpullv1beta1.A
 		// possible that every object that required cleanup is already gone; in which case we should exit the
 		// process, so the Pod that succeeds us can filter the informers used to drive the controller and stop
 		// having to track extraneous objects
+		c.Log.Info("checking to see if legacy token cleanup is complete")
 		return &cleanupAction{checkCompletion: true}
 	}
 
 	// legacy secret still exists, let's clean it up
+	c.Log.WithValues("tokenNamespace", legacySecret.Namespace, "tokenName", legacySecret.Name).Info("cleaning up legacy pull token secret")
 	return &cleanupAction{deleteSecret: legacySecret}
 }
 
