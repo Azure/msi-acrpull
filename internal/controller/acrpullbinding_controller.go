@@ -12,7 +12,6 @@ import (
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -157,14 +156,7 @@ func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logge
 		r.now().After(pullSecretExpiry(log, pullSecret).Add(-1*tokenRefreshBuffer)) ||
 		pullSecret.Annotations[tokenInputsAnnotation] != inputHash {
 		log.Info("generating new pull credential")
-		var acrAccessToken types.AccessToken
-		var err error
-
-		if msiClientID != "" {
-			acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithClientID(ctx, log, msiClientID, acrServer)
-		} else {
-			acrAccessToken, err = r.Auth.AcquireACRAccessTokenWithResourceID(ctx, log, msiResourceID, acrServer)
-		}
+		acrAccessToken, err := r.Auth.AcquireACRAccessToken(ctx, msiResourceID, msiClientID, acrServer, acrBinding.Spec.Scope)
 		if err != nil {
 			updated := acrBinding.DeepCopy()
 			updated.Status.Error = fmt.Sprintf("failed to retrieve ACR access token: %v", err)
@@ -172,16 +164,15 @@ func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logge
 			return &action{updatePullBindingStatus: updated}
 		}
 
-		dockerConfig := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
-
-		tokenExp, err := acrAccessToken.GetTokenExp()
+		dockerConfig, err := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
 		if err != nil {
 			updated := acrBinding.DeepCopy()
-			updated.Status.Error = fmt.Sprintf("failed to retrieve ACR access token expiry: %v", err)
+			updated.Status.Error = fmt.Sprintf("failed to write ACR dockercfg: %v", err)
 			log.Info(updated.Status.Error)
 			return &action{updatePullBindingStatus: updated}
 		}
-		newSecret := newPullSecret(acrBinding, dockerConfig, r.Scheme, tokenExp, r.now, inputHash)
+
+		newSecret := newPullSecret(acrBinding, dockerConfig, r.Scheme, acrAccessToken.ExpiresOn, r.now, inputHash)
 		log = log.WithValues("secret", client.ObjectKeyFromObject(newSecret).String())
 		if pullSecret == nil {
 			log.Info("creating pull credential secret")

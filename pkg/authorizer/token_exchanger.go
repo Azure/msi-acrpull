@@ -4,84 +4,78 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
+	"time"
 
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
-	"github.com/go-logr/logr"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry"
 )
 
-// TokenExchanger is an instance of ACRTokenExchanger
-type TokenExchanger struct {
-	acrServerScheme string
-	client          *rateLimitedClient
-}
-
-// NewTokenExchanger returns a new token exchanger
-func NewTokenExchanger() *TokenExchanger {
-	return &TokenExchanger{
-		acrServerScheme: "https",
-		client:          newRateLimitedClient(),
-	}
-}
-
 // ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
-func (te *TokenExchanger) ExchangeACRAccessToken(ctx context.Context, log logr.Logger, armToken types.AccessToken, acrFQDN string) (types.AccessToken, error) {
-	scheme := te.acrServerScheme
-	if scheme == "" {
-		scheme = "https"
-	}
-
-	exchangeURL := fmt.Sprintf("%s://%s/oauth2/exchange", scheme, acrFQDN)
-	ul, err := url.Parse(exchangeURL)
+func ExchangeACRAccessToken(ctx context.Context, armToken azcore.AccessToken, acrFQDN, scope string) (azcore.AccessToken, error) {
+	endpoint, err := url.Parse(fmt.Sprintf("https://%s", acrFQDN))
 	if err != nil {
-		return "", fmt.Errorf("failed to parse token exchange url: %w", err)
+		return azcore.AccessToken{}, fmt.Errorf("failed to parse ACR endpoint: %w", err)
 	}
-	parameters := url.Values{}
-	parameters.Add("grant_type", "access_token")
-	parameters.Add("service", ul.Hostname())
-	parameters.Add("access_token", string(armToken))
 
-	req, err := http.NewRequestWithContext(ctx, "POST", exchangeURL, strings.NewReader(parameters.Encode()))
+	client, err := azcontainerregistry.NewAuthenticationClient(endpoint.String(), nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to construct token exchange reqeust: %w", err)
+		return azcore.AccessToken{}, fmt.Errorf("failed to create ACR authentication client: %w", err)
+	}
+	fmt.Printf("asking for access_token")
+	refreshResponse, err := client.ExchangeAADAccessTokenForACRRefreshToken(ctx, azcontainerregistry.PostContentSchemaGrantTypeAccessToken, endpoint.Hostname(), &azcontainerregistry.AuthenticationClientExchangeAADAccessTokenForACRRefreshTokenOptions{
+		AccessToken: ptr.To(armToken.Token),
+	})
+	if err != nil {
+		return azcore.AccessToken{}, fmt.Errorf("failed to exchange AAD access token for ACR refresh token: %w", err)
 	}
 
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Content-Length", strconv.Itoa(len(parameters.Encode())))
+	if refreshResponse.RefreshToken == nil {
+		return azcore.AccessToken{}, errors.New("got an empty response when exchanging AAD access token for ACR refresh token")
+	}
 
-	var resp *http.Response
-	defer func() {
-		if resp != nil && resp.Body != nil {
-			if err := resp.Body.Close(); err != nil {
-				log.Error(err, "failed to close response body")
-			}
+	// for legacy compatibility, we allow exposing the unscoped refresh token
+	accessToken := *refreshResponse.RefreshToken
+	if scope != "" {
+		accessResponse, err := client.ExchangeACRRefreshTokenForACRAccessToken(ctx, acrFQDN, scope, *refreshResponse.RefreshToken, &azcontainerregistry.AuthenticationClientExchangeACRRefreshTokenForACRAccessTokenOptions{
+			GrantType: ptr.To(azcontainerregistry.TokenGrantTypeRefreshToken),
+		})
+		if err != nil {
+			return azcore.AccessToken{}, fmt.Errorf("failed to exchange ACR refresh token for ACR access token: %w", err)
 		}
-	}()
+		if accessResponse.AccessToken == nil {
+			return azcore.AccessToken{}, errors.New("got an empty response when exchanging ACR refresh token for ACR access token")
+		}
+		accessToken = *accessResponse.AccessToken
+	}
 
-	resp, err = te.client.Do(req)
+	token, _, err := jwt.NewParser(jwt.WithoutClaimsValidation()).ParseUnverified(accessToken, jwt.MapClaims{})
 	if err != nil {
-		return "", fmt.Errorf("failed to send token exchange request: %w", err)
+		return azcore.AccessToken{}, fmt.Errorf("failed to parse ACR access token")
 	}
 
-	if resp.StatusCode != 200 {
-		responseBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("ACR token exchange endpoint returned error status: %d. body: %s", resp.StatusCode, string(responseBytes))
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return azcore.AccessToken{}, fmt.Errorf("unexpected claim type from ACR access token")
 	}
 
-	responseBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read request body: %w", err)
+	var expiry time.Time
+	switch exp := claims["exp"].(type) {
+	case float64:
+		expiry = time.Unix(int64(exp), 0)
+	case json.Number:
+		timestamp, _ := exp.Int64()
+		expiry = time.Unix(timestamp, 0)
+	default:
+		return azcore.AccessToken{}, fmt.Errorf("failed to parse ACR acess token expiration")
 	}
 
-	var tokenResp tokenResponse
-	err = json.Unmarshal(responseBytes, &tokenResp)
-	if err != nil {
-		return "", fmt.Errorf("failed to read token exchange response: %w. response: %s", err, string(responseBytes))
-	}
-
-	return types.AccessToken(tokenResp.RefreshToken), nil
+	return azcore.AccessToken{
+		Token:     accessToken,
+		ExpiresOn: expiry,
+	}, nil
 }
