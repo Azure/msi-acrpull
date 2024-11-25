@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/mock_authorizer"
 	"github.com/go-logr/logr/testr"
 	"github.com/golang-jwt/jwt/v5"
@@ -28,7 +29,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
 )
 
 // generating lots of PKI in environments where compute and/or entropy is limited (like in test containers)
@@ -72,7 +72,7 @@ func privateKey(t *testing.T) crypto.PrivateKey {
 	return key
 }
 
-func getTestToken(t *testing.T, now func() time.Time, expiry time.Time) types.AccessToken {
+func getTestToken(t *testing.T, now func() time.Time, expiry time.Time) azcore.AccessToken {
 	signingKey := privateKey(t)
 
 	claims := jwt.MapClaims{
@@ -95,7 +95,10 @@ func getTestToken(t *testing.T, now func() time.Time, expiry time.Time) types.Ac
 		t.Fatalf("failed to sign token: %v", err)
 	}
 
-	return types.AccessToken(tokenString)
+	return azcore.AccessToken{
+		Token:     tokenString,
+		ExpiresOn: expiry,
+	}
 }
 
 // the JWT library doesn't allow mocking out the source of randomness for testing, so it's not possible to
@@ -216,6 +219,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
 				Spec: msiacrpullv1beta1.AcrPullBindingSpec{
 					ServiceAccountName: "delegate",
+					Scope:              "repository:testing:pull,push",
 				},
 			},
 			serviceAccount: &corev1.ServiceAccount{
@@ -223,11 +227,12 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			},
 			pullSecret: nil,
 			registerTokenCall: func(mock *mock_authorizer.MockInterface) {
-				mock.EXPECT().AcquireACRAccessTokenWithResourceID(
+				mock.EXPECT().AcquireACRAccessToken(
 					context.Background(),
-					gomock.Any(),
 					gomock.Eq(defaultManagedIdentityResourceID),
-					gomock.Eq(defaultACRServer)).
+					gomock.Eq(""),
+					gomock.Eq(defaultACRServer),
+					gomock.Eq("repository:testing:pull,push")).
 					Return(futureToken, nil).
 					Times(1)
 			},
@@ -273,12 +278,13 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			},
 			pullSecret: nil,
 			registerTokenCall: func(mock *mock_authorizer.MockInterface) {
-				mock.EXPECT().AcquireACRAccessTokenWithResourceID(
+				mock.EXPECT().AcquireACRAccessToken(
 					context.Background(),
-					gomock.Any(),
 					gomock.Eq(defaultManagedIdentityResourceID),
-					gomock.Eq(defaultACRServer)).
-					Return(types.AccessToken(""), errors.New("oops")).
+					gomock.Eq(""),
+					gomock.Eq(defaultACRServer),
+					gomock.Eq("")).
+					Return(azcore.AccessToken{}, errors.New("oops")).
 					Times(1)
 			},
 			output: &action{
@@ -289,39 +295,6 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					},
 					Status: msiacrpullv1beta1.AcrPullBindingStatus{
 						Error: `failed to retrieve ACR access token: oops`,
-					},
-				},
-			},
-		},
-		{
-			name: "malformed pull credential exposed",
-			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
-				Spec: msiacrpullv1beta1.AcrPullBindingSpec{
-					ServiceAccountName: "delegate",
-				},
-			},
-			serviceAccount: &corev1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
-			},
-			pullSecret: nil,
-			registerTokenCall: func(mock *mock_authorizer.MockInterface) {
-				mock.EXPECT().AcquireACRAccessTokenWithResourceID(
-					context.Background(),
-					gomock.Any(),
-					gomock.Eq(defaultManagedIdentityResourceID),
-					gomock.Eq(defaultACRServer)).
-					Return(types.AccessToken("fake"), nil).
-					Times(1)
-			},
-			output: &action{
-				updatePullBindingStatus: &msiacrpullv1beta1.AcrPullBinding{
-					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
-					Spec: msiacrpullv1beta1.AcrPullBindingSpec{
-						ServiceAccountName: "delegate",
-					},
-					Status: msiacrpullv1beta1.AcrPullBindingStatus{
-						Error: `failed to retrieve ACR access token expiry: failed to parse token`,
 					},
 				},
 			},
@@ -464,11 +437,12 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				},
 			},
 			registerTokenCall: func(mock *mock_authorizer.MockInterface) {
-				mock.EXPECT().AcquireACRAccessTokenWithResourceID(
+				mock.EXPECT().AcquireACRAccessToken(
 					context.Background(),
-					gomock.Any(),
 					gomock.Eq(defaultManagedIdentityResourceID),
-					gomock.Eq(defaultACRServer)).
+					gomock.Eq(""),
+					gomock.Eq(defaultACRServer),
+					gomock.Eq("")).
 					Return(futureToken, nil).
 					Times(1)
 			},
@@ -702,11 +676,12 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				},
 			},
 			registerTokenCall: func(mock *mock_authorizer.MockInterface) {
-				mock.EXPECT().AcquireACRAccessTokenWithResourceID(
+				mock.EXPECT().AcquireACRAccessToken(
 					context.Background(),
-					gomock.Any(),
 					gomock.Eq(defaultManagedIdentityResourceID),
-					gomock.Eq("somewhere.else.biz")).
+					gomock.Eq(""),
+					gomock.Eq("somewhere.else.biz"),
+					gomock.Eq("")).
 					Return(otherToken, nil).
 					Times(1)
 			},
@@ -784,11 +759,12 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				},
 			},
 			registerTokenCall: func(mock *mock_authorizer.MockInterface) {
-				mock.EXPECT().AcquireACRAccessTokenWithResourceID(
+				mock.EXPECT().AcquireACRAccessToken(
 					context.Background(),
-					gomock.Any(),
 					gomock.Eq("whatever/identity"),
-					gomock.Eq("somewhere.else.biz")).
+					gomock.Eq(""),
+					gomock.Eq("somewhere.else.biz"),
+					gomock.Eq("")).
 					Return(otherToken, nil).
 					Times(1)
 			},
@@ -866,11 +842,12 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				},
 			},
 			registerTokenCall: func(mock *mock_authorizer.MockInterface) {
-				mock.EXPECT().AcquireACRAccessTokenWithClientID(
+				mock.EXPECT().AcquireACRAccessToken(
 					context.Background(),
-					gomock.Any(),
+					gomock.Eq(defaultManagedIdentityResourceID),
 					gomock.Eq("client-identity"),
-					gomock.Eq("somewhere.else.biz")).
+					gomock.Eq("somewhere.else.biz"),
+					gomock.Eq("")).
 					Return(otherToken, nil).
 					Times(1)
 			},

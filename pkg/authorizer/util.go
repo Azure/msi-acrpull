@@ -2,27 +2,40 @@ package authorizer
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 )
 
 const (
 	acrUsername = "00000000-0000-0000-0000-000000000000"
 )
 
-type tokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	Resource     string `json:"resource"`
-	TokenType    string `json:"token_type"`
+type dockercfg struct {
+	Auths map[string]auth `json:"auths"`
+}
+
+type auth struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+	Auth     string `json:"auth"`
 }
 
 // CreateACRDockerCfg creates an ACR docker config using given access token.
-func CreateACRDockerCfg(acrFQDN string, accessToken types.AccessToken) string {
-	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken)))
-	dockercfg := fmt.Sprintf("{\"auths\":{\"%s\":{\"username\":\"%s\",\"password\":\"%s\",\"email\":\"msi-acrpull@azurecr.io\",\"auth\":\"%s\"}}}",
-		acrFQDN, acrUsername, accessToken, auth)
+func CreateACRDockerCfg(acrFQDN string, accessToken azcore.AccessToken) (string, error) {
+	cfg := dockercfg{
+		Auths: map[string]auth{
+			acrFQDN: {
+				Username: acrUsername,
+				Password: accessToken.Token,
+				Email:    "msi-acrpull@azurecr.io",
+				Auth:     base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", acrUsername, accessToken.Token))),
+			},
+		},
+	}
 
-	return dockercfg
+	encoded, err := json.Marshal(cfg)
+	return string(encoded), err
 }

@@ -4,40 +4,32 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Azure/msi-acrpull/pkg/authorizer/types"
-	"github.com/go-logr/logr"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 )
 
 // Authorizer is an instance of authorizer
-type Authorizer struct {
-	tokenRetriever ManagedIdentityTokenRetriever
-	tokenExchanger ACRTokenExchanger
-}
+type Authorizer struct{}
 
 // NewAuthorizer returns an authorizer
 func NewAuthorizer() *Authorizer {
-	return &Authorizer{
-		tokenRetriever: NewTokenRetriever(),
-		tokenExchanger: NewTokenExchanger(),
-	}
+	return &Authorizer{}
 }
 
-// AcquireACRAccessTokenWithResourceID acquires ACR access token using managed identity resource ID (/subscriptions/{id}/resourceGroups/{group}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/{name}).
-func (az *Authorizer) AcquireACRAccessTokenWithResourceID(ctx context.Context, log logr.Logger, identityResourceID string, acrFQDN string) (types.AccessToken, error) {
-	armToken, err := az.tokenRetriever.AcquireARMToken(ctx, log, "", identityResourceID)
+// AcquireACRAccessToken acquires ACR access token using managed identity resource or client ID.
+func (az *Authorizer) AcquireACRAccessToken(ctx context.Context, identityResourceID, clientID, acrFQDN, scope string) (azcore.AccessToken, error) {
+	var id azidentity.ManagedIDKind
+	if clientID != "" {
+		id = azidentity.ClientID(clientID)
+	} else if identityResourceID != "" {
+		id = azidentity.ResourceID(identityResourceID)
+	} else {
+		return azcore.AccessToken{}, fmt.Errorf("either a client ID or a resource ID is required")
+	}
+	armToken, err := AcquireARMToken(ctx, id)
 	if err != nil {
-		return "", fmt.Errorf("failed to get ARM access token: %w", err)
+		return azcore.AccessToken{}, fmt.Errorf("failed to get ARM access token: %w", err)
 	}
 
-	return az.tokenExchanger.ExchangeACRAccessToken(ctx, log, armToken, acrFQDN)
-}
-
-// AcquireACRAccessTokenWithClientID acquires ACR access token using managed identity client ID.
-func (az *Authorizer) AcquireACRAccessTokenWithClientID(ctx context.Context, log logr.Logger, clientID string, acrFQDN string) (types.AccessToken, error) {
-	armToken, err := az.tokenRetriever.AcquireARMToken(ctx, log, clientID, "")
-	if err != nil {
-		return "", fmt.Errorf("failed to get ARM access token: %w", err)
-	}
-
-	return az.tokenExchanger.ExchangeACRAccessToken(ctx, log, armToken, acrFQDN)
+	return ExchangeACRAccessToken(ctx, armToken, acrFQDN, scope)
 }

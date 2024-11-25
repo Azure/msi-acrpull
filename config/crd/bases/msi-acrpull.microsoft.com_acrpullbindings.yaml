@@ -51,6 +51,11 @@ spec:
                 description: The Managed Identity resource ID that is used to authenticate
                   with ACR (if ClientID is specified, this is ignored)
                 type: string
+              scope:
+                description: |-
+                  The registry scope which the pull token should have. For example, repository:my-repository:pull,push
+                  See docs for details: https://docs.docker.com/registry/spec/auth/scope/
+                type: string
               serviceAccountName:
                 description: |-
                   The Service Account to associate the image pull secret with. If this is not specified, the default Service Account
