@@ -102,13 +102,21 @@ _output/deploy/crd: _output/aks.kubeconfig _output/config $(KUSTOMIZE) _output/d
 	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.msi-acrpull.microsoft.com
 	touch $@
 
-_output/deploy/image: _output/image _output/deploy/previous
+_output/deploy/new-image: _output/deploy/previous _output/deploy/image
+	touch $@
+
+_output/deploy/image: _output/image
 _output/deploy/previous-image: _output/previous-image
 _output/deploy/image _output/deploy/previous-image: _output/aks.kubeconfig $(KUSTOMIZE) _output/deploy/prometheus-crds _output/system-vmss-puller.json _output/deploy/crd
 	cd _output/config/manager && $(KUSTOMIZE) edit set image controller="$(shell cat _output/$(notdir $@) )" && cd -
 	$(KUSTOMIZE) build _output/config/default | kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f -
 	kubectl --kubeconfig _output/aks.kubeconfig --namespace msi-acrpull-system wait --for condition=Available deployment/msi-acrpull-controller-manager --timeout 120s
 	touch $@
+
+deploy:
+	cd _output/config/manager && $(KUSTOMIZE) edit set image controller="$(shell cat _output/image )" && cd -
+	$(KUSTOMIZE) build _output/config/default | kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f -
+	kubectl --kubeconfig _output/aks.kubeconfig --namespace msi-acrpull-system wait --for condition=Available deployment/msi-acrpull-controller-manager --timeout 120s
 
 _output/deploy/previous: _output/deploy/previous-image _output/system-vmss-puller.json
 	cp pullbinding.template.yaml _output/pullbinding.yaml
@@ -118,9 +126,9 @@ _output/deploy/previous: _output/deploy/previous-image _output/system-vmss-pulle
 	touch $@
 
 .PHONY: test
-test: _output/deploy/image _output/alice _output/bob
+test: _output/deploy/new-image _output/alice _output/bob
 	$(MAKE) test-e2e
 
 .PHONY: test-e2e
 test-e2e:
-	ALICE_IMAGE="$(shell cat _output/alice )" BOB_IMAGE="$(shell cat _output/bob )" KUBECONFIG="_output/aks.kubeconfig" ACR_FQDN="$(shell jq --raw-output '.properties.outputs.acr.value.registryName.value' < _output/acr-infrastructure.json).azurecr.io" PULLER_ID="$(shell jq --raw-output '.properties.outputs.acr.value.pullerIdentity.value' < _output/acr-infrastructure.json )" LABEL_SELECTOR="agentpool=user" go test -v -tags e2e ./
+	ALICE_IMAGE="$(shell cat _output/alice )" BOB_IMAGE="$(shell cat _output/bob )" KUBECONFIG="_output/aks.kubeconfig" ACR_FQDN="$(shell jq --raw-output '.properties.outputs.acr.value.registryName.value' < _output/acr-infrastructure.json).azurecr.io" PULLER_ID="$(shell jq --raw-output '.properties.outputs.acr.value.pullerIdentity.value' < _output/acr-infrastructure.json )" LABEL_SELECTOR="agentpool=user" go test -v -tags e2e ./ $(GOTESTFLAGS)

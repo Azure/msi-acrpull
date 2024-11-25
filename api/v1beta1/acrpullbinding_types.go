@@ -38,6 +38,11 @@ type AcrPullBindingSpec struct {
 	// The full server name for the ACR. For example, test.azurecr.io
 	AcrServer string `json:"acrServer"`
 
+	// The registry scope which the pull token should have. For example, repository:my-repository:pull,push
+	// See docs for details: https://docs.docker.com/registry/spec/auth/scope/
+	// +optional
+	Scope string `json:"scope"`
+
 	// The Managed Identity client ID that is used to authenticate with ACR (specify one of ClientID or ResourceID)
 	// +optional
 	ManagedIdentityClientID string `json:"managedIdentityClientID"`
