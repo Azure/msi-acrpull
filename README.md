@@ -9,10 +9,20 @@ Run following command to install latest build from main branch. It will install 
 kubectl apply -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/crd.yaml -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/deploy.yaml
 ```
 
+# Install with Helm
+Run following command to install latest helm chart from main branch. It will install the needed custom resource definition `ACRPullBinding` deploy msi-acrpull controllers in `msi-acrpull-system` namespace, and `AAD Pod Identity Binding`.
+
+```bash
+helm repo add msi-acrpull https://raw.githubusercontent.com/Azure/msi-acrpull/main/charts
+helm install msi-acrpull msi-acrpull/msi-acrpull -f ./values.yaml --version v0.1.0-alpha -n msi-acrpull-system
+```
+
 # How to use
 > NOTE: following steps assumes you already have:
 > 1) An Kubernetes cluster, and have user assigned managed identities on node pool VMSS.
-> 1) An ACR, and the user assigned identity has [AcrPull](https://docs.microsoft.com/en-us/azure/container-registry/container-registry-roles#pull-image) role assigned on ACR.
+> 2) An ACR, and the user assigned identity has [AcrPull](https://docs.microsoft.com/en-us/azure/container-registry/
+container-registry-roles#pull-image) role assigned on ACR.
+> 3) The user assigned identity has been mapped to msi-acrpull pod with labels and [AAD Pod Identity](https://github.com/Azure/aad-pod-identity)
 
 Once msi-acrpull is installed to your cluster, all you need is to deploy a custom resource `AcrPullBinding` to the application namesapce to bind an user assigned identity to an ACR. Following sample specifies all pods using default service account in the namespace to use user managed identity `my-acr-puller` to pull image from `veryimportantcr.azurecr.io`.
 
