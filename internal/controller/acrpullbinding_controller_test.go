@@ -180,14 +180,14 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 
 		registerTokenCall func(*mock_authorizer.MockInterface)
 
-		output *action
+		output *action[*msiacrpullv1beta1.AcrPullBinding]
 	}{
 		{
 			name: "binding missing finalizer gets one",
 			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding"},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updatePullBinding: &msiacrpullv1beta1.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
 				},
@@ -201,7 +201,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					ServiceAccountName: "missing",
 				},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updatePullBindingStatus: &msiacrpullv1beta1.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
 					Spec: msiacrpullv1beta1.AcrPullBindingSpec{
@@ -236,7 +236,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					Return(futureToken, nil).
 					Times(1)
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				createSecret: &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ns", Name: "acr-pull-binding-37d7ayn69u",
@@ -287,7 +287,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					Return(azcore.AccessToken{}, errors.New("oops")).
 					Times(1)
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updatePullBindingStatus: &msiacrpullv1beta1.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
 					Spec: msiacrpullv1beta1.AcrPullBindingSpec{
@@ -336,7 +336,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					".dockerconfigjson": []byte(`{"auths":{"DefaultACRServer":{"username":"00000000-0000-0000-0000-000000000000","password":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0ZXN0LmF6dXJlY3IuaW8iLCJleHAiOjExMzYzMDA2NDUsImdyYW50X3R5cGUiOiJyZWZyZXNoX3Rva2VuIiwiaWF0IjoxMTM2MDQxNDQ1LCJpc3MiOiJBenVyZSBDb250YWluZXIgUmVnaXN0cnkiLCJqdGkiOiJiYjhkNmQzZC1jN2IwLTRmOTYtYTM5MC04NzM4ZjczMGU4YzYiLCJuYmYiOjExMzYxMjc4NDUsInBlcm1pc3Npb25zIjp7ImFjdGlvbnMiOlsicmVhZCJdfSwidmVyc2lvbiI6MX0.lb8wJOjWSmpVBX-qf0VTjRTKcSiPsqDAe_g-Fow_3LHcqXUyfRspjmFmH9YtaFN3TsA72givXOBE_UQSj2i1CPshvXVfpGuJRPssy_olq1uzfr2L8w6AL1jwM96gCP3e2Od5YT8p6Dbg4RDoBy5xz1zHluoUH2-4jiCh81bRzyAjQGZmKf1MQygLVHHuCjLlijpdw2wHp5nB4m27Yi5z5rrgLzcvXQnSEGIj2t0BY_AuNRbffEFCCFHeDlu6ud1F-Ak35ljIWhkJumP3Zud-rPdIc1YeCQCSGT2-yk4epVX_N4UPsk3hc6XeZxC4ctu9UX9mqfSNe5ZZlO6dtt963A","email":"msi-acrpull@azurecr.io","auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOmV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpoZFdRaU9pSjBaWE4wTG1GNmRYSmxZM0l1YVc4aUxDSmxlSEFpT2pFeE16WXpNREEyTkRVc0ltZHlZVzUwWDNSNWNHVWlPaUp5WldaeVpYTm9YM1J2YTJWdUlpd2lhV0YwSWpveE1UTTJNRFF4TkRRMUxDSnBjM01pT2lKQmVuVnlaU0JEYjI1MFlXbHVaWElnVW1WbmFYTjBjbmtpTENKcWRHa2lPaUppWWpoa05tUXpaQzFqTjJJd0xUUm1PVFl0WVRNNU1DMDROek00Wmpjek1HVTRZellpTENKdVltWWlPakV4TXpZeE1qYzRORFVzSW5CbGNtMXBjM05wYjI1eklqcDdJbUZqZEdsdmJuTWlPbHNpY21WaFpDSmRmU3dpZG1WeWMybHZiaUk2TVgwLmxiOHdKT2pXU21wVkJYLXFmMFZUalJUS2NTaVBzcURBZV9nLUZvd18zTEhjcVhVeWZSc3BqbUZtSDlZdGFGTjNUc0E3MmdpdlhPQkVfVVFTajJpMUNQc2h2WFZmcEd1SlJQc3N5X29scTF1emZyMkw4dzZBTDFqd005NmdDUDNlMk9kNVlUOHA2RGJnNFJEb0J5NXh6MXpIbHVvVUgyLTRqaUNoODFiUnp5QWpRR1ptS2YxTVF5Z0xWSEh1Q2pMbGlqcGR3MndIcDVuQjRtMjdZaTV6NXJyZ0x6Y3ZYUW5TRUdJajJ0MEJZX0F1TlJiZmZFRkNDRkhlRGx1NnVkMUYtQWszNWxqSVdoa0p1bVAzWnVkLXJQZEljMVllQ1FDU0dUMi15azRlcFZYX040VVBzazNoYzZYZVp4QzRjdHU5VVg5bXFmU05lNVpabE82ZHR0OTYzQQ=="}}}`),
 				},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updateServiceAccount: &corev1.ServiceAccount{
 					ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
 					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "acr-pull-binding-37d7ayn69u"}},
@@ -381,7 +381,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					".dockerconfigjson": []byte(`{"auths":{"DefaultACRServer":{"username":"00000000-0000-0000-0000-000000000000","password":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0ZXN0LmF6dXJlY3IuaW8iLCJleHAiOjExMzYzMDA2NDUsImdyYW50X3R5cGUiOiJyZWZyZXNoX3Rva2VuIiwiaWF0IjoxMTM2MDQxNDQ1LCJpc3MiOiJBenVyZSBDb250YWluZXIgUmVnaXN0cnkiLCJqdGkiOiJiYjhkNmQzZC1jN2IwLTRmOTYtYTM5MC04NzM4ZjczMGU4YzYiLCJuYmYiOjExMzYxMjc4NDUsInBlcm1pc3Npb25zIjp7ImFjdGlvbnMiOlsicmVhZCJdfSwidmVyc2lvbiI6MX0.lb8wJOjWSmpVBX-qf0VTjRTKcSiPsqDAe_g-Fow_3LHcqXUyfRspjmFmH9YtaFN3TsA72givXOBE_UQSj2i1CPshvXVfpGuJRPssy_olq1uzfr2L8w6AL1jwM96gCP3e2Od5YT8p6Dbg4RDoBy5xz1zHluoUH2-4jiCh81bRzyAjQGZmKf1MQygLVHHuCjLlijpdw2wHp5nB4m27Yi5z5rrgLzcvXQnSEGIj2t0BY_AuNRbffEFCCFHeDlu6ud1F-Ak35ljIWhkJumP3Zud-rPdIc1YeCQCSGT2-yk4epVX_N4UPsk3hc6XeZxC4ctu9UX9mqfSNe5ZZlO6dtt963A","email":"msi-acrpull@azurecr.io","auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOmV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpoZFdRaU9pSjBaWE4wTG1GNmRYSmxZM0l1YVc4aUxDSmxlSEFpT2pFeE16WXpNREEyTkRVc0ltZHlZVzUwWDNSNWNHVWlPaUp5WldaeVpYTm9YM1J2YTJWdUlpd2lhV0YwSWpveE1UTTJNRFF4TkRRMUxDSnBjM01pT2lKQmVuVnlaU0JEYjI1MFlXbHVaWElnVW1WbmFYTjBjbmtpTENKcWRHa2lPaUppWWpoa05tUXpaQzFqTjJJd0xUUm1PVFl0WVRNNU1DMDROek00Wmpjek1HVTRZellpTENKdVltWWlPakV4TXpZeE1qYzRORFVzSW5CbGNtMXBjM05wYjI1eklqcDdJbUZqZEdsdmJuTWlPbHNpY21WaFpDSmRmU3dpZG1WeWMybHZiaUk2TVgwLmxiOHdKT2pXU21wVkJYLXFmMFZUalJUS2NTaVBzcURBZV9nLUZvd18zTEhjcVhVeWZSc3BqbUZtSDlZdGFGTjNUc0E3MmdpdlhPQkVfVVFTajJpMUNQc2h2WFZmcEd1SlJQc3N5X29scTF1emZyMkw4dzZBTDFqd005NmdDUDNlMk9kNVlUOHA2RGJnNFJEb0J5NXh6MXpIbHVvVUgyLTRqaUNoODFiUnp5QWpRR1ptS2YxTVF5Z0xWSEh1Q2pMbGlqcGR3MndIcDVuQjRtMjdZaTV6NXJyZ0x6Y3ZYUW5TRUdJajJ0MEJZX0F1TlJiZmZFRkNDRkhlRGx1NnVkMUYtQWszNWxqSVdoa0p1bVAzWnVkLXJQZEljMVllQ1FDU0dUMi15azRlcFZYX040VVBzazNoYzZYZVp4QzRjdHU5VVg5bXFmU05lNVpabE82ZHR0OTYzQQ=="}}}`),
 				},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updatePullBindingStatus: &msiacrpullv1beta1.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
 					Spec: msiacrpullv1beta1.AcrPullBindingSpec{
@@ -446,7 +446,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					Return(futureToken, nil).
 					Times(1)
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updateSecret: &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ns", Name: "acr-pull-binding-37d7ayn69u",
@@ -517,7 +517,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					".dockerconfigjson": []byte(`{"auths":{"DefaultACRServer":{"username":"00000000-0000-0000-0000-000000000000","password":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0ZXN0LmF6dXJlY3IuaW8iLCJleHAiOjExMzYzMDA2NDUsImdyYW50X3R5cGUiOiJyZWZyZXNoX3Rva2VuIiwiaWF0IjoxMTM2MDQxNDQ1LCJpc3MiOiJBenVyZSBDb250YWluZXIgUmVnaXN0cnkiLCJqdGkiOiJiYjhkNmQzZC1jN2IwLTRmOTYtYTM5MC04NzM4ZjczMGU4YzYiLCJuYmYiOjExMzYxMjc4NDUsInBlcm1pc3Npb25zIjp7ImFjdGlvbnMiOlsicmVhZCJdfSwidmVyc2lvbiI6MX0.lb8wJOjWSmpVBX-qf0VTjRTKcSiPsqDAe_g-Fow_3LHcqXUyfRspjmFmH9YtaFN3TsA72givXOBE_UQSj2i1CPshvXVfpGuJRPssy_olq1uzfr2L8w6AL1jwM96gCP3e2Od5YT8p6Dbg4RDoBy5xz1zHluoUH2-4jiCh81bRzyAjQGZmKf1MQygLVHHuCjLlijpdw2wHp5nB4m27Yi5z5rrgLzcvXQnSEGIj2t0BY_AuNRbffEFCCFHeDlu6ud1F-Ak35ljIWhkJumP3Zud-rPdIc1YeCQCSGT2-yk4epVX_N4UPsk3hc6XeZxC4ctu9UX9mqfSNe5ZZlO6dtt963A","email":"msi-acrpull@azurecr.io","auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOmV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpoZFdRaU9pSjBaWE4wTG1GNmRYSmxZM0l1YVc4aUxDSmxlSEFpT2pFeE16WXpNREEyTkRVc0ltZHlZVzUwWDNSNWNHVWlPaUp5WldaeVpYTm9YM1J2YTJWdUlpd2lhV0YwSWpveE1UTTJNRFF4TkRRMUxDSnBjM01pT2lKQmVuVnlaU0JEYjI1MFlXbHVaWElnVW1WbmFYTjBjbmtpTENKcWRHa2lPaUppWWpoa05tUXpaQzFqTjJJd0xUUm1PVFl0WVRNNU1DMDROek00Wmpjek1HVTRZellpTENKdVltWWlPakV4TXpZeE1qYzRORFVzSW5CbGNtMXBjM05wYjI1eklqcDdJbUZqZEdsdmJuTWlPbHNpY21WaFpDSmRmU3dpZG1WeWMybHZiaUk2TVgwLmxiOHdKT2pXU21wVkJYLXFmMFZUalJUS2NTaVBzcURBZV9nLUZvd18zTEhjcVhVeWZSc3BqbUZtSDlZdGFGTjNUc0E3MmdpdlhPQkVfVVFTajJpMUNQc2h2WFZmcEd1SlJQc3N5X29scTF1emZyMkw4dzZBTDFqd005NmdDUDNlMk9kNVlUOHA2RGJnNFJEb0J5NXh6MXpIbHVvVUgyLTRqaUNoODFiUnp5QWpRR1ptS2YxTVF5Z0xWSEh1Q2pMbGlqcGR3MndIcDVuQjRtMjdZaTV6NXJyZ0x6Y3ZYUW5TRUdJajJ0MEJZX0F1TlJiZmZFRkNDRkhlRGx1NnVkMUYtQWszNWxqSVdoa0p1bVAzWnVkLXJQZEljMVllQ1FDU0dUMi15azRlcFZYX040VVBzazNoYzZYZVp4QzRjdHU5VVg5bXFmU05lNVpabE82ZHR0OTYzQQ=="}}}`),
 				},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updatePullBindingStatus: &msiacrpullv1beta1.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
 					Spec: msiacrpullv1beta1.AcrPullBindingSpec{
@@ -625,7 +625,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					".dockerconfigjson": []byte(`{"auths":{"DefaultACRServer":{"username":"00000000-0000-0000-0000-000000000000","password":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0ZXN0LmF6dXJlY3IuaW8iLCJleHAiOjExMzYzMDA2NDUsImdyYW50X3R5cGUiOiJyZWZyZXNoX3Rva2VuIiwiaWF0IjoxMTM2MDQxNDQ1LCJpc3MiOiJBenVyZSBDb250YWluZXIgUmVnaXN0cnkiLCJqdGkiOiJiYjhkNmQzZC1jN2IwLTRmOTYtYTM5MC04NzM4ZjczMGU4YzYiLCJuYmYiOjExMzYxMjc4NDUsInBlcm1pc3Npb25zIjp7ImFjdGlvbnMiOlsicmVhZCJdfSwidmVyc2lvbiI6MX0.lb8wJOjWSmpVBX-qf0VTjRTKcSiPsqDAe_g-Fow_3LHcqXUyfRspjmFmH9YtaFN3TsA72givXOBE_UQSj2i1CPshvXVfpGuJRPssy_olq1uzfr2L8w6AL1jwM96gCP3e2Od5YT8p6Dbg4RDoBy5xz1zHluoUH2-4jiCh81bRzyAjQGZmKf1MQygLVHHuCjLlijpdw2wHp5nB4m27Yi5z5rrgLzcvXQnSEGIj2t0BY_AuNRbffEFCCFHeDlu6ud1F-Ak35ljIWhkJumP3Zud-rPdIc1YeCQCSGT2-yk4epVX_N4UPsk3hc6XeZxC4ctu9UX9mqfSNe5ZZlO6dtt963A","email":"msi-acrpull@azurecr.io","auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOmV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpoZFdRaU9pSjBaWE4wTG1GNmRYSmxZM0l1YVc4aUxDSmxlSEFpT2pFeE16WXpNREEyTkRVc0ltZHlZVzUwWDNSNWNHVWlPaUp5WldaeVpYTm9YM1J2YTJWdUlpd2lhV0YwSWpveE1UTTJNRFF4TkRRMUxDSnBjM01pT2lKQmVuVnlaU0JEYjI1MFlXbHVaWElnVW1WbmFYTjBjbmtpTENKcWRHa2lPaUppWWpoa05tUXpaQzFqTjJJd0xUUm1PVFl0WVRNNU1DMDROek00Wmpjek1HVTRZellpTENKdVltWWlPakV4TXpZeE1qYzRORFVzSW5CbGNtMXBjM05wYjI1eklqcDdJbUZqZEdsdmJuTWlPbHNpY21WaFpDSmRmU3dpZG1WeWMybHZiaUk2TVgwLmxiOHdKT2pXU21wVkJYLXFmMFZUalJUS2NTaVBzcURBZV9nLUZvd18zTEhjcVhVeWZSc3BqbUZtSDlZdGFGTjNUc0E3MmdpdlhPQkVfVVFTajJpMUNQc2h2WFZmcEd1SlJQc3N5X29scTF1emZyMkw4dzZBTDFqd005NmdDUDNlMk9kNVlUOHA2RGJnNFJEb0J5NXh6MXpIbHVvVUgyLTRqaUNoODFiUnp5QWpRR1ptS2YxTVF5Z0xWSEh1Q2pMbGlqcGR3MndIcDVuQjRtMjdZaTV6NXJyZ0x6Y3ZYUW5TRUdJajJ0MEJZX0F1TlJiZmZFRkNDRkhlRGx1NnVkMUYtQWszNWxqSVdoa0p1bVAzWnVkLXJQZEljMVllQ1FDU0dUMi15azRlcFZYX040VVBzazNoYzZYZVp4QzRjdHU5VVg5bXFmU05lNVpabE82ZHR0OTYzQQ=="}}}`),
 				},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updateServiceAccount: &corev1.ServiceAccount{
 					ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
 					ImagePullSecrets: []corev1.LocalObjectReference{},
@@ -685,7 +685,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					Return(otherToken, nil).
 					Times(1)
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updateSecret: &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ns", Name: "acr-pull-binding-37d7ayn69u",
@@ -768,7 +768,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					Return(otherToken, nil).
 					Times(1)
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updateSecret: &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ns", Name: "acr-pull-binding-37d7ayn69u",
@@ -798,13 +798,13 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "user changes to use a client ID, regenerate",
+			name: "user changes to use a Client ID, regenerate",
 			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
 				Spec: msiacrpullv1beta1.AcrPullBindingSpec{
 					ServiceAccountName:      "delegate",
 					AcrServer:               "somewhere.else.biz",
-					ManagedIdentityClientID: "client-identity",
+					ManagedIdentityClientID: "Client-identity",
 				},
 				Status: msiacrpullv1beta1.AcrPullBindingStatus{
 					LastTokenRefreshTime: &metav1.Time{Time: fakeClock.Now()},
@@ -845,13 +845,13 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				mock.EXPECT().AcquireACRAccessToken(
 					context.Background(),
 					gomock.Eq(defaultManagedIdentityResourceID),
-					gomock.Eq("client-identity"),
+					gomock.Eq("Client-identity"),
 					gomock.Eq("somewhere.else.biz"),
 					gomock.Eq("")).
 					Return(otherToken, nil).
 					Times(1)
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updateSecret: &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ns", Name: "acr-pull-binding-37d7ayn69u",
@@ -861,7 +861,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 						Annotations: map[string]string{
 							"acr.microsoft.com/token.expiry":  otherExpiry.Format(time.RFC3339),
 							"acr.microsoft.com/token.refresh": fakeClock.Now().Format(time.RFC3339),
-							"acr.microsoft.com/token.inputs":  "2ly31qdswhqrgh1j0vbpmt2oopxt3sxbjhfsef4x942x",
+							"acr.microsoft.com/token.inputs":  "2e134ajxrn0xllpwotsvet3felcqjnipmkd29wx8gvu5",
 						},
 						OwnerReferences: []metav1.OwnerReference{
 							{
@@ -926,7 +926,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					".dockerconfigjson": []byte(`{"auths":{"DefaultACRServer":{"username":"00000000-0000-0000-0000-000000000000","password":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0ZXN0LmF6dXJlY3IuaW8iLCJleHAiOjExMzYzMDA2NDUsImdyYW50X3R5cGUiOiJyZWZyZXNoX3Rva2VuIiwiaWF0IjoxMTM2MDQxNDQ1LCJpc3MiOiJBenVyZSBDb250YWluZXIgUmVnaXN0cnkiLCJqdGkiOiJiYjhkNmQzZC1jN2IwLTRmOTYtYTM5MC04NzM4ZjczMGU4YzYiLCJuYmYiOjExMzYxMjc4NDUsInBlcm1pc3Npb25zIjp7ImFjdGlvbnMiOlsicmVhZCJdfSwidmVyc2lvbiI6MX0.lb8wJOjWSmpVBX-qf0VTjRTKcSiPsqDAe_g-Fow_3LHcqXUyfRspjmFmH9YtaFN3TsA72givXOBE_UQSj2i1CPshvXVfpGuJRPssy_olq1uzfr2L8w6AL1jwM96gCP3e2Od5YT8p6Dbg4RDoBy5xz1zHluoUH2-4jiCh81bRzyAjQGZmKf1MQygLVHHuCjLlijpdw2wHp5nB4m27Yi5z5rrgLzcvXQnSEGIj2t0BY_AuNRbffEFCCFHeDlu6ud1F-Ak35ljIWhkJumP3Zud-rPdIc1YeCQCSGT2-yk4epVX_N4UPsk3hc6XeZxC4ctu9UX9mqfSNe5ZZlO6dtt963A","email":"msi-acrpull@azurecr.io","auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOmV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpoZFdRaU9pSjBaWE4wTG1GNmRYSmxZM0l1YVc4aUxDSmxlSEFpT2pFeE16WXpNREEyTkRVc0ltZHlZVzUwWDNSNWNHVWlPaUp5WldaeVpYTm9YM1J2YTJWdUlpd2lhV0YwSWpveE1UTTJNRFF4TkRRMUxDSnBjM01pT2lKQmVuVnlaU0JEYjI1MFlXbHVaWElnVW1WbmFYTjBjbmtpTENKcWRHa2lPaUppWWpoa05tUXpaQzFqTjJJd0xUUm1PVFl0WVRNNU1DMDROek00Wmpjek1HVTRZellpTENKdVltWWlPakV4TXpZeE1qYzRORFVzSW5CbGNtMXBjM05wYjI1eklqcDdJbUZqZEdsdmJuTWlPbHNpY21WaFpDSmRmU3dpZG1WeWMybHZiaUk2TVgwLmxiOHdKT2pXU21wVkJYLXFmMFZUalJUS2NTaVBzcURBZV9nLUZvd18zTEhjcVhVeWZSc3BqbUZtSDlZdGFGTjNUc0E3MmdpdlhPQkVfVVFTajJpMUNQc2h2WFZmcEd1SlJQc3N5X29scTF1emZyMkw4dzZBTDFqd005NmdDUDNlMk9kNVlUOHA2RGJnNFJEb0J5NXh6MXpIbHVvVUgyLTRqaUNoODFiUnp5QWpRR1ptS2YxTVF5Z0xWSEh1Q2pMbGlqcGR3MndIcDVuQjRtMjdZaTV6NXJyZ0x6Y3ZYUW5TRUdJajJ0MEJZX0F1TlJiZmZFRkNDRkhlRGx1NnVkMUYtQWszNWxqSVdoa0p1bVAzWnVkLXJQZEljMVllQ1FDU0dUMi15azRlcFZYX040VVBzazNoYzZYZVp4QzRjdHU5VVg5bXFmU05lNVpabE82ZHR0OTYzQQ=="}}}`),
 				},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updateServiceAccount: &corev1.ServiceAccount{
 					ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
 					ImagePullSecrets: []corev1.LocalObjectReference{},
@@ -979,7 +979,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					".dockerconfigjson": []byte(`{"auths":{"DefaultACRServer":{"username":"00000000-0000-0000-0000-000000000000","password":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0ZXN0LmF6dXJlY3IuaW8iLCJleHAiOjExMzYzMDA2NDUsImdyYW50X3R5cGUiOiJyZWZyZXNoX3Rva2VuIiwiaWF0IjoxMTM2MDQxNDQ1LCJpc3MiOiJBenVyZSBDb250YWluZXIgUmVnaXN0cnkiLCJqdGkiOiJiYjhkNmQzZC1jN2IwLTRmOTYtYTM5MC04NzM4ZjczMGU4YzYiLCJuYmYiOjExMzYxMjc4NDUsInBlcm1pc3Npb25zIjp7ImFjdGlvbnMiOlsicmVhZCJdfSwidmVyc2lvbiI6MX0.lb8wJOjWSmpVBX-qf0VTjRTKcSiPsqDAe_g-Fow_3LHcqXUyfRspjmFmH9YtaFN3TsA72givXOBE_UQSj2i1CPshvXVfpGuJRPssy_olq1uzfr2L8w6AL1jwM96gCP3e2Od5YT8p6Dbg4RDoBy5xz1zHluoUH2-4jiCh81bRzyAjQGZmKf1MQygLVHHuCjLlijpdw2wHp5nB4m27Yi5z5rrgLzcvXQnSEGIj2t0BY_AuNRbffEFCCFHeDlu6ud1F-Ak35ljIWhkJumP3Zud-rPdIc1YeCQCSGT2-yk4epVX_N4UPsk3hc6XeZxC4ctu9UX9mqfSNe5ZZlO6dtt963A","email":"msi-acrpull@azurecr.io","auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOmV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpoZFdRaU9pSjBaWE4wTG1GNmRYSmxZM0l1YVc4aUxDSmxlSEFpT2pFeE16WXpNREEyTkRVc0ltZHlZVzUwWDNSNWNHVWlPaUp5WldaeVpYTm9YM1J2YTJWdUlpd2lhV0YwSWpveE1UTTJNRFF4TkRRMUxDSnBjM01pT2lKQmVuVnlaU0JEYjI1MFlXbHVaWElnVW1WbmFYTjBjbmtpTENKcWRHa2lPaUppWWpoa05tUXpaQzFqTjJJd0xUUm1PVFl0WVRNNU1DMDROek00Wmpjek1HVTRZellpTENKdVltWWlPakV4TXpZeE1qYzRORFVzSW5CbGNtMXBjM05wYjI1eklqcDdJbUZqZEdsdmJuTWlPbHNpY21WaFpDSmRmU3dpZG1WeWMybHZiaUk2TVgwLmxiOHdKT2pXU21wVkJYLXFmMFZUalJUS2NTaVBzcURBZV9nLUZvd18zTEhjcVhVeWZSc3BqbUZtSDlZdGFGTjNUc0E3MmdpdlhPQkVfVVFTajJpMUNQc2h2WFZmcEd1SlJQc3N5X29scTF1emZyMkw4dzZBTDFqd005NmdDUDNlMk9kNVlUOHA2RGJnNFJEb0J5NXh6MXpIbHVvVUgyLTRqaUNoODFiUnp5QWpRR1ptS2YxTVF5Z0xWSEh1Q2pMbGlqcGR3MndIcDVuQjRtMjdZaTV6NXJyZ0x6Y3ZYUW5TRUdJajJ0MEJZX0F1TlJiZmZFRkNDRkhlRGx1NnVkMUYtQWszNWxqSVdoa0p1bVAzWnVkLXJQZEljMVllQ1FDU0dUMi15azRlcFZYX040VVBzazNoYzZYZVp4QzRjdHU5VVg5bXFmU05lNVpabE82ZHR0OTYzQQ=="}}}`),
 				},
 			},
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				deleteSecret: &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ns", Name: "acr-pull-binding-37d7ayn69u",
@@ -1029,7 +1029,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				ImagePullSecrets: []corev1.LocalObjectReference{},
 			},
 			pullSecret: nil,
-			output: &action{
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
 				updatePullBinding: &msiacrpullv1beta1.AcrPullBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: "ns", Name: "binding",
@@ -1053,17 +1053,20 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			if testCase.registerTokenCall != nil {
 				testCase.registerTokenCall(fakeAuth)
 			}
-			controller := &AcrPullBindingReconciler{
-				Log:                              testr.NewWithOptions(t, testr.Options{Verbosity: 0}),
-				Scheme:                           scheme.Scheme,
+			logger := testr.NewWithOptions(t, testr.Options{Verbosity: 0})
+			controller := NewV1beta1Reconciler(&V1beta1ReconcilerOpts{
+				CoreOpts: CoreOpts{
+					Logger: logger,
+					Scheme: scheme.Scheme,
+					now:    fakeClock.Now,
+				},
 				Auth:                             fakeAuth,
 				DefaultManagedIdentityResourceID: defaultManagedIdentityResourceID,
 				DefaultACRServer:                 defaultACRServer,
-				now:                              fakeClock.Now,
-			}
+			})
 
-			output := controller.reconcile(context.Background(), controller.Log, testCase.acrBinding, testCase.serviceAccount, testCase.pullSecret, testCase.referencingServiceAccounts)
-			if diff := cmp.Diff(testCase.output, output, cmp.AllowUnexported(action{})); diff != "" {
+			output := controller.reconcile(context.Background(), logger, testCase.acrBinding, testCase.serviceAccount, testCase.pullSecret, testCase.referencingServiceAccounts)
+			if diff := cmp.Diff(testCase.output, output, cmp.AllowUnexported(action[*msiacrpullv1beta1.AcrPullBinding]{})); diff != "" {
 				t.Errorf("-want, +got:\n%s", diff)
 			}
 		})

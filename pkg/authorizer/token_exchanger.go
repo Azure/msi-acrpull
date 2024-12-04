@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
@@ -26,7 +27,6 @@ func ExchangeACRAccessToken(ctx context.Context, armToken azcore.AccessToken, ac
 	if err != nil {
 		return azcore.AccessToken{}, fmt.Errorf("failed to create ACR authentication client: %w", err)
 	}
-	fmt.Printf("asking for access_token")
 	refreshResponse, err := client.ExchangeAADAccessTokenForACRRefreshToken(ctx, azcontainerregistry.PostContentSchemaGrantTypeAccessToken, endpoint.Hostname(), &azcontainerregistry.AuthenticationClientExchangeAADAccessTokenForACRRefreshTokenOptions{
 		AccessToken: ptr.To(armToken.Token),
 	})
@@ -78,4 +78,8 @@ func ExchangeACRAccessToken(ctx context.Context, armToken azcore.AccessToken, ac
 		Token:     accessToken,
 		ExpiresOn: expiry,
 	}, nil
+}
+
+func ExchangeACRAccessTokenForSpec(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
+	return ExchangeACRAccessToken(ctx, armToken, spec.Server, spec.Scope)
 }
