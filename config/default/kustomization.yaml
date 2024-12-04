@@ -6,6 +6,7 @@ resources:
 - ../rbac
 - ../manager
 - ../prometheus
+- ../validatingadmissionpolicy
 
 patches:
 - path: manager_auth_proxy_patch.yaml

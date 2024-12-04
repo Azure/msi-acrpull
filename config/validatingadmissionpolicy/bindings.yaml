@@ -1,0 +1,36 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: "msi-acrpull-controller-token-request-policy-binding"
+spec:
+  policyName: "msi-acrpull-controller-token-request-policy"
+  validationActions: [Deny]
+  paramRef:
+    name: "admission-policies-msi-acrpull-controller-config"
+    namespace: "system"
+    parameterNotFoundAction: "Deny"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: "msi-acrpull-controller-secret-mutation-policy-binding"
+spec:
+  policyName: "msi-acrpull-controller-secret-mutation-policy"
+  validationActions: [Deny]
+  paramRef:
+    name: "admission-policies-msi-acrpull-controller-config"
+    namespace: "system"
+    parameterNotFoundAction: "Deny"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: "msi-acrpull-controller-service-account-mutation-policy-binding"
+spec:
+  policyName: "msi-acrpull-controller-service-account-mutation-policy"
+  validationActions: [Deny]
+  paramRef:
+    name: "admission-policies-msi-acrpull-controller-config"
+    namespace: "system"
+    parameterNotFoundAction: "Deny"
+---
