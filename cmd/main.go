@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 
+	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	"github.com/Azure/msi-acrpull/internal/controller"
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -40,6 +42,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(msiacrpullv1beta1.AddToScheme(scheme))
+	utilruntime.Must(msiacrpullv1beta2.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -47,11 +50,15 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var serviceAccountTokenAudience string
+	var ttlRotationFraction float64
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&serviceAccountTokenAudience, "service-account-token-audience", "api://AzureCRTokenExchange", "The audience to ask the Kubernetes API server to mint Service Account tokens for, must match Federated Identity Credential configuration in Azure.")
+	flag.Float64Var(&ttlRotationFraction, "ttl-rotation-fraction", 0.5, "The fraction of the pull token's TTL at which the v1beta2 reconciler will refresh the token.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -115,18 +122,39 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-
-	apbReconciler := &controller.AcrPullBindingReconciler{
-		Client:                           mgr.GetClient(),
-		Log:                              ctrl.Log.WithName("controllers").WithName("AcrPullBinding"),
-		Scheme:                           mgr.GetScheme(),
+	apbReconciler := controller.NewV1beta1Reconciler(&controller.V1beta1ReconcilerOpts{
+		CoreOpts: controller.CoreOpts{
+			Client: mgr.GetClient(),
+			Logger: ctrl.Log.WithName("controller").WithName("AcrPullBinding"),
+			Scheme: mgr.GetScheme(),
+		},
 		Auth:                             authorizer.NewAuthorizer(),
-		DefaultACRServer:                 defaultACRServer,
 		DefaultManagedIdentityResourceID: defaultManagedIdentityResourceID,
 		DefaultManagedIdentityClientID:   defaultManagedIdentityClientID,
-	}
+		DefaultACRServer:                 defaultACRServer,
+	})
 	if err := apbReconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBinding")
+		os.Exit(1)
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to create client")
+	}
+
+	v1beta2Reconciler := controller.NewV1beta2Reconciler(&controller.V1beta2ReconcilerOpts{
+		CoreOpts: controller.CoreOpts{
+			Client: mgr.GetClient(),
+			Logger: ctrl.Log.WithName("controller").WithName("AcrPullBindingV1beta2"),
+			Scheme: mgr.GetScheme(),
+		},
+		TTLRotationFraction:         ttlRotationFraction,
+		ServiceAccountTokenAudience: serviceAccountTokenAudience,
+		ServiceAccountClient:        kubeClient.CoreV1(),
+	})
+	if err := v1beta2Reconciler.SetupWithManager(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBindingV1beta2")
 		os.Exit(1)
 	}
 
