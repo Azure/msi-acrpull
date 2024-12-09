@@ -39,7 +39,7 @@ type AcrPullBindingSpec struct {
 	AcrServer string `json:"acrServer"`
 
 	// The registry scope which the pull token should have. For example, repository:my-repository:pull,push
-	// See docs for details: https://docs.docker.com/registry/spec/auth/scope/
+	// See docs for details: https://distribution.github.io/distribution/spec/auth/scope/
 	// +optional
 	Scope string `json:"scope"`
 

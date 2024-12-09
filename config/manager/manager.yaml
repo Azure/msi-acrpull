@@ -75,7 +75,7 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
-      serviceAccountName: controller-manager
+      serviceAccountName: msi-acrpull-controller-manager
       terminationGracePeriodSeconds: 10
       affinity:
         nodeAffinity:

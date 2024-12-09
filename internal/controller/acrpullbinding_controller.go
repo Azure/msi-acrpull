@@ -14,10 +14,8 @@ import (
 	"github.com/Azure/msi-acrpull/pkg/authorizer"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -42,17 +40,101 @@ const (
 	tokenRefreshBuffer = time.Minute * 30
 )
 
-// AcrPullBindingReconciler reconciles a AcrPullBinding object
-type AcrPullBindingReconciler struct {
-	client.Client
-	Log                              logr.Logger
-	Scheme                           *runtime.Scheme
+// V1beta1ReconcilerOpts configures the inputs for reconciling v1beta2 pull bindings
+type V1beta1ReconcilerOpts struct {
+	CoreOpts
+
 	Auth                             authorizer.Interface
 	DefaultManagedIdentityResourceID string
 	DefaultManagedIdentityClientID   string
 	DefaultACRServer                 string
+}
 
-	now func() time.Time
+func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler {
+	if opts.now == nil {
+		opts.now = time.Now
+	}
+
+	return &AcrPullBindingReconciler{
+		&genericReconciler[*msiacrpullv1beta1.AcrPullBinding]{
+			Client: opts.Client,
+			Logger: opts.Logger,
+			Scheme: opts.Scheme,
+			NewBinding: func() *msiacrpullv1beta1.AcrPullBinding {
+				return &msiacrpullv1beta1.AcrPullBinding{}
+			},
+			AddFinalizer: func(binding *msiacrpullv1beta1.AcrPullBinding, finalizer string) *msiacrpullv1beta1.AcrPullBinding {
+				updated := binding.DeepCopy()
+				updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, finalizer)
+				return updated
+			},
+			RemoveFinalizer: func(binding *msiacrpullv1beta1.AcrPullBinding, finalizer string) *msiacrpullv1beta1.AcrPullBinding {
+				updated := binding.DeepCopy()
+				updated.ObjectMeta.Finalizers = slices.DeleteFunc(updated.ObjectMeta.Finalizers, func(s string) bool {
+					return s == finalizer
+				})
+				return updated
+			},
+			GetServiceAccountName: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
+				serviceAccountName := binding.Spec.ServiceAccountName
+				if serviceAccountName == "" {
+					serviceAccountName = defaultServiceAccountName
+				}
+				return serviceAccountName
+			},
+			GetInputsHash: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
+				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec) // TODO: add scope to hash, test changing scope
+				return base36sha224([]byte(msiClientID + msiResourceID + acrServer))
+			},
+			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
+				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
+				acrAccessToken, err := opts.Auth.AcquireACRAccessToken(ctx, msiResourceID, msiClientID, acrServer, binding.Spec.Scope)
+				if err != nil {
+					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR access token: %w", err)
+				}
+
+				dockerConfig, err := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
+				if err != nil {
+					return "", time.Time{}, fmt.Errorf("failed to write ACR dockercfg: %v", err)
+				}
+
+				return dockerConfig, acrAccessToken.ExpiresOn, nil
+			},
+			UpdateStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding, s string) *msiacrpullv1beta1.AcrPullBinding {
+				updated := binding.DeepCopy()
+				updated.Status.Error = s
+				return updated
+			},
+			NeedsRefresh: func(logger logr.Logger, pullSecret *corev1.Secret, now func() time.Time) bool {
+				return now().After(pullSecretExpiry(logger, pullSecret).Add(-1 * tokenRefreshBuffer))
+			},
+			RequeueAfter: func(now func() time.Time) func(binding *msiacrpullv1beta1.AcrPullBinding) time.Duration {
+				return func(binding *msiacrpullv1beta1.AcrPullBinding) time.Duration {
+					var requeueAfter time.Duration
+					if binding.Status.TokenExpirationTime != nil {
+						requeueAfter = binding.Status.TokenExpirationTime.Time.Add(-1 * tokenRefreshBuffer).Sub(now())
+					}
+					return requeueAfter
+				}
+			},
+			NeedsStatusUpdate: func(refresh time.Time, expiry time.Time, binding *msiacrpullv1beta1.AcrPullBinding) bool {
+				return binding.Status.TokenExpirationTime == nil || !binding.Status.TokenExpirationTime.Equal(&metav1.Time{Time: expiry}) ||
+					binding.Status.LastTokenRefreshTime == nil || !binding.Status.LastTokenRefreshTime.Equal(&metav1.Time{Time: refresh})
+			},
+			UpdateStatus: func(refresh time.Time, expiry time.Time, binding *msiacrpullv1beta1.AcrPullBinding) *msiacrpullv1beta1.AcrPullBinding {
+				updated := binding.DeepCopy()
+				updated.Status.TokenExpirationTime = &metav1.Time{Time: expiry}
+				updated.Status.LastTokenRefreshTime = &metav1.Time{Time: refresh}
+				return updated
+			},
+			now: opts.now,
+		},
+	}
+}
+
+// AcrPullBindingReconciler reconciles a AcrPullBinding object
+type AcrPullBindingReconciler struct {
+	*genericReconciler[*msiacrpullv1beta1.AcrPullBinding]
 }
 
 //+kubebuilder:rbac:groups=msi-acrpull.microsoft.com,resources=acrpullbindings,verbs=get;list;watch;create;update;patch;delete
@@ -61,240 +143,52 @@ type AcrPullBindingReconciler struct {
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=*
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;update;patch
 
-func (r *AcrPullBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues("acrpullbinding", req.NamespacedName)
-
-	acrBinding := &msiacrpullv1beta1.AcrPullBinding{}
-	if err := r.Get(ctx, req.NamespacedName, acrBinding); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "unable to fetch acrPullBinding.")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
-	serviceAccount := &corev1.ServiceAccount{}
-	if err := r.Get(ctx, k8stypes.NamespacedName{
-		Namespace: req.Namespace,
-		Name:      getServiceAccountName(acrBinding.Spec.ServiceAccountName),
-	}, serviceAccount); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get service account")
-			return ctrl.Result{}, err
-		} else {
-			serviceAccount = nil
-		}
-	}
-
-	expectedPullSecretName := pullSecretName(acrBinding.Name)
-	pullSecret := &corev1.Secret{}
-	if err := r.Get(ctx, k8stypes.NamespacedName{
-		Namespace: req.Namespace,
-		Name:      expectedPullSecretName,
-	}, pullSecret); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get pull secret")
-			return ctrl.Result{}, err
-		} else {
-			pullSecret = nil
-		}
-	}
-
-	var referencingServiceAccounts corev1.ServiceAccountList
-	if err := r.List(ctx, &referencingServiceAccounts, client.InNamespace(acrBinding.GetNamespace()), client.MatchingFields{imagePullSecretsField: expectedPullSecretName}); err != nil {
-		log.Error(err, "failed to fetch service accounts referencing pull secret")
-		return ctrl.Result{}, err
-	}
-
-	action := r.reconcile(ctx, log, acrBinding, serviceAccount, pullSecret, referencingServiceAccounts.Items)
-
-	return r.execute(ctx, action)
-}
-
-func (r *AcrPullBindingReconciler) reconcile(ctx context.Context, log logr.Logger, acrBinding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount, pullSecret *corev1.Secret, referencingServiceAccounts []corev1.ServiceAccount) *action {
-	// examine DeletionTimestamp to determine if acr pull binding is under deletion
-	if acrBinding.ObjectMeta.DeletionTimestamp.IsZero() {
-		// the object is not being deleted, so if it does not have our finalizer,
-		// then need to add the finalizer and update the object.
-		if !slices.Contains(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
-			updated := acrBinding.DeepCopy()
-			updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, msiAcrPullFinalizerName)
-			log.Info("adding finalizer to pull binding")
-			return &action{updatePullBinding: updated}
-		}
-	} else {
-		// the object is being deleted, do cleanup as necessary
-		return r.cleanUp(acrBinding, serviceAccount, pullSecret, log)
-	}
-
-	// if the user changed which service account should be bound to this credential, we need to
-	// un-bind the credential from any service accounts it was bound to previously
-	extraneousServiceAccounts := slices.DeleteFunc(referencingServiceAccounts, func(other corev1.ServiceAccount) bool {
-		return serviceAccount != nil && other.Name == serviceAccount.Name
-	})
-	for _, extraneous := range extraneousServiceAccounts {
-		updated := extraneous.DeepCopy()
-		updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-			return reference.Name == pullSecretName(acrBinding.ObjectMeta.Name)
-		})
-		if len(updated.ImagePullSecrets) != len(extraneous.ImagePullSecrets) {
-			log.WithValues("serviceAccount", client.ObjectKeyFromObject(&extraneous).String()).Info("updating service account to remove image pull secret")
-			return &action{updateServiceAccount: updated}
-		}
-	}
-
-	if serviceAccount == nil {
-		updated := acrBinding.DeepCopy()
-		updated.Status.Error = fmt.Sprintf("service account %q not found", getServiceAccountName(acrBinding.Spec.ServiceAccountName))
-		log.Info(updated.Status.Error)
-		return &action{updatePullBindingStatus: updated}
-	}
-
-	msiClientID, msiResourceID, acrServer := specOrDefault(r, acrBinding.Spec)
-	inputHash := base36sha224([]byte(msiClientID + msiResourceID + acrServer))
-	if pullSecret == nil ||
-		r.now().After(pullSecretExpiry(log, pullSecret).Add(-1*tokenRefreshBuffer)) ||
-		pullSecret.Annotations[tokenInputsAnnotation] != inputHash {
-		log.Info("generating new pull credential")
-		acrAccessToken, err := r.Auth.AcquireACRAccessToken(ctx, msiResourceID, msiClientID, acrServer, acrBinding.Spec.Scope)
-		if err != nil {
-			updated := acrBinding.DeepCopy()
-			updated.Status.Error = fmt.Sprintf("failed to retrieve ACR access token: %v", err)
-			log.Info(updated.Status.Error)
-			return &action{updatePullBindingStatus: updated}
-		}
-
-		dockerConfig, err := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)
-		if err != nil {
-			updated := acrBinding.DeepCopy()
-			updated.Status.Error = fmt.Sprintf("failed to write ACR dockercfg: %v", err)
-			log.Info(updated.Status.Error)
-			return &action{updatePullBindingStatus: updated}
-		}
-
-		newSecret := newPullSecret(acrBinding, dockerConfig, r.Scheme, acrAccessToken.ExpiresOn, r.now, inputHash)
-		log = log.WithValues("secret", client.ObjectKeyFromObject(newSecret).String())
-		if pullSecret == nil {
-			log.Info("creating pull credential secret")
-			return &action{createSecret: newSecret}
-		} else {
-			log.Info("updating pull credential secret")
-			return &action{updateSecret: newSecret}
-		}
-	}
-
-	if !slices.ContainsFunc(serviceAccount.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-		return reference.Name == pullSecret.Name
-	}) {
-		updated := serviceAccount.DeepCopy()
-		updated.ImagePullSecrets = append(updated.ImagePullSecrets, corev1.LocalObjectReference{
-			Name: pullSecret.Name,
-		})
-		log.WithValues("serviceAccount", client.ObjectKeyFromObject(serviceAccount).String()).Info("updating service account to add image pull secret")
-		return &action{updateServiceAccount: updated}
-	}
-
-	return r.setSuccessStatus(log, acrBinding, pullSecret)
-}
-
-func (r *AcrPullBindingReconciler) execute(ctx context.Context, action *action) (ctrl.Result, error) {
-	if action == nil {
-		return ctrl.Result{}, nil
-	}
-	action.validate()
-	if action.updatePullBinding != nil {
-		return ctrl.Result{}, r.Update(ctx, action.updatePullBinding)
-	} else if action.updatePullBindingStatus != nil {
-		var requeueAfter time.Duration
-		if action.updatePullBindingStatus.Status.TokenExpirationTime != nil {
-			requeueAfter = action.updatePullBindingStatus.Status.TokenExpirationTime.Time.Sub(r.now().Add(tokenRefreshBuffer))
-		}
-		return ctrl.Result{RequeueAfter: requeueAfter}, r.Status().Update(ctx, action.updatePullBindingStatus)
-	} else if action.createSecret != nil {
-		return ctrl.Result{}, r.Create(ctx, action.createSecret)
-	} else if action.updateSecret != nil {
-		return ctrl.Result{}, r.Update(ctx, action.updateSecret)
-	} else if action.deleteSecret != nil {
-		return ctrl.Result{}, r.Delete(ctx, action.deleteSecret)
-	} else if action.updateServiceAccount != nil {
-		return ctrl.Result{}, r.Update(ctx, action.updateServiceAccount)
-	}
-	return ctrl.Result{}, nil
-}
-
-// action captures the outcome of a reconciliation pass using static data, to aid in testing the reconciliation loop
-type action struct {
-	updatePullBinding       *msiacrpullv1beta1.AcrPullBinding
-	updatePullBindingStatus *msiacrpullv1beta1.AcrPullBinding
-
-	createSecret *corev1.Secret
-	updateSecret *corev1.Secret
-	deleteSecret *corev1.Secret
-
-	updateServiceAccount *corev1.ServiceAccount
-}
-
-func (a *action) validate() {
-	var present int
-	if a.updatePullBinding != nil {
-		present++
-	}
-	if a.updatePullBindingStatus != nil {
-		present++
-	}
-	if a.createSecret != nil {
-		present++
-	}
-	if a.updateSecret != nil {
-		present++
-	}
-	if a.deleteSecret != nil {
-		present++
-	}
-	if a.updateServiceAccount != nil {
-		present++
-	}
-	if present > 1 {
-		panic("programmer error: more than one action specified in reconciliation loop")
-	}
-}
-
-func specOrDefault(r *AcrPullBindingReconciler, spec msiacrpullv1beta1.AcrPullBindingSpec) (string, string, string) {
+func specOrDefault(opts *V1beta1ReconcilerOpts, spec msiacrpullv1beta1.AcrPullBindingSpec) (string, string, string) {
 	msiClientID := spec.ManagedIdentityClientID
 	msiResourceID := path.Clean(spec.ManagedIdentityResourceID)
 	acrServer := spec.AcrServer
 	if msiClientID == "" {
-		msiClientID = r.DefaultManagedIdentityClientID
+		msiClientID = opts.DefaultManagedIdentityClientID
 	}
 	if msiResourceID == "." {
-		msiResourceID = r.DefaultManagedIdentityResourceID
+		msiResourceID = opts.DefaultManagedIdentityResourceID
 	}
 	if acrServer == "" {
-		acrServer = r.DefaultACRServer
+		acrServer = opts.DefaultACRServer
 	}
 	return msiClientID, msiResourceID, acrServer
 }
 
 // pullSecretExpiry determines when a pull credential stored in a Secret expires
 func pullSecretExpiry(log logr.Logger, secret *corev1.Secret) time.Time {
+	return extractPullSecretTimeAnnotation(log, secret, tokenExpiryAnnotation)
+}
+
+// pullSecretRefresh determines when a pull credential stored in a Secret was last refreshed
+func pullSecretRefresh(log logr.Logger, secret *corev1.Secret) time.Time {
+	return extractPullSecretTimeAnnotation(log, secret, tokenRefreshAnnotation)
+}
+
+// extractPullSecretTimeAnnotation extracts a timestamp from an annotation on the secret
+func extractPullSecretTimeAnnotation(log logr.Logger, secret *corev1.Secret, annotation string) time.Time {
 	if secret == nil {
 		return time.Time{}
 	}
 
-	formattedExpiry, annotated := secret.Annotations[tokenExpiryAnnotation]
+	formattedTime, annotated := secret.Annotations[annotation]
 	if !annotated {
 		return time.Time{}
 	}
 
-	expiry, err := time.Parse(time.RFC3339, formattedExpiry)
+	timestamp, err := time.Parse(time.RFC3339, formattedTime)
 	if err != nil {
 		// we should never get into this state unless some other actor corrupts our annotation,
 		// so we can consider this token expired and re-generate it to get back to a good state
-		log.WithValues("secret", client.ObjectKeyFromObject(secret).String()).Error(err, "unexpected error parsing expiry annotation on secret")
+		log.WithValues("secret", client.ObjectKeyFromObject(secret).String()).WithValues("annotation", annotation).Error(err, "unexpected error parsing annotation on secret")
 		return time.Time{}
 	}
 
-	return expiry
+	return timestamp
 }
 
 func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
@@ -328,82 +222,6 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		Owns(&corev1.Secret{}).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).
 		Complete(r)
-}
-
-func (r *AcrPullBindingReconciler) cleanUp(acrBinding *msiacrpullv1beta1.AcrPullBinding,
-	serviceAccount *corev1.ServiceAccount, pullSecret *corev1.Secret, log logr.Logger) *action {
-	if slices.Contains(acrBinding.ObjectMeta.Finalizers, msiAcrPullFinalizerName) {
-		// our finalizer is present, so need to clean up ImagePullSecret reference
-		if serviceAccount == nil {
-			log.Info("Service account is not found. Continue removing finalizer")
-		} else {
-			updated := serviceAccount.DeepCopy()
-			updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-				return reference.Name == pullSecretName(acrBinding.ObjectMeta.Name)
-			})
-			if len(updated.ImagePullSecrets) != len(serviceAccount.ImagePullSecrets) {
-				log.WithValues("serviceAccount", client.ObjectKeyFromObject(serviceAccount).String()).Info("updating service account to remove image pull secret")
-				return &action{updateServiceAccount: updated}
-			}
-		}
-
-		// remove the secret
-		if pullSecret != nil {
-			log.WithValues("secret", client.ObjectKeyFromObject(pullSecret).String()).Info("cleaning up pull credential")
-			return &action{deleteSecret: pullSecret}
-		}
-
-		// remove our finalizer from the list and update it.
-		updated := acrBinding.DeepCopy()
-		updated.ObjectMeta.Finalizers = slices.DeleteFunc(updated.ObjectMeta.Finalizers, func(s string) bool {
-			return s == msiAcrPullFinalizerName
-		})
-		log.Info("removing finalizer from pull binding")
-		return &action{updatePullBinding: updated}
-	}
-	log.Info("no finalizer present, nothing to do")
-	return nil
-}
-
-func (r *AcrPullBindingReconciler) setSuccessStatus(log logr.Logger, acrBinding *msiacrpullv1beta1.AcrPullBinding, pullSecret *corev1.Secret) *action {
-	log = log.WithValues("secret", client.ObjectKeyFromObject(pullSecret).String())
-
-	// malformed expiry and refresh annotations indicate some other actor corrupted our pull credential secret;
-	// we will re-generate it with correct values in the future, at which point we can update the pull binding
-
-	formattedExpiry, annotated := pullSecret.Annotations[tokenExpiryAnnotation]
-	if !annotated {
-		log.Info("token expiry annotation not present in secret")
-		return nil
-	}
-
-	expiry, err := time.Parse(time.RFC3339, formattedExpiry)
-	if err != nil {
-		log.Error(err, "failed to parse expiry annotation")
-		return nil
-	}
-
-	formattedRefresh, annotated := pullSecret.Annotations[tokenRefreshAnnotation]
-	if !annotated {
-		log.Info("token refresh annotation not present in secret")
-		return nil
-	}
-
-	refresh, err := time.Parse(time.RFC3339, formattedRefresh)
-	if err != nil {
-		log.Error(err, "failed to parse refresh annotation")
-		return nil
-	}
-
-	if acrBinding.Status.TokenExpirationTime == nil || !acrBinding.Status.TokenExpirationTime.Equal(&metav1.Time{Time: expiry}) ||
-		acrBinding.Status.LastTokenRefreshTime == nil || !acrBinding.Status.LastTokenRefreshTime.Equal(&metav1.Time{Time: refresh}) {
-		updated := acrBinding.DeepCopy()
-		updated.Status.TokenExpirationTime = &metav1.Time{Time: expiry}
-		updated.Status.LastTokenRefreshTime = &metav1.Time{Time: refresh}
-		log.Info("updating pull binding to reflect expiry and refresh time from secret")
-		return &action{updatePullBindingStatus: updated}
-	}
-	return nil
 }
 
 func getServiceAccountName(userSpecifiedName string) string {
@@ -440,22 +258,22 @@ func legacySecretName(acrBindingName string) string {
 	return fmt.Sprintf("%s-msi-acrpull-secret", acrBindingName)
 }
 
-func newPullSecret(acrBinding *msiacrpullv1beta1.AcrPullBinding,
+func newPullSecret(acrBinding client.Object,
 	dockerConfig string, scheme *runtime.Scheme, expiry time.Time, now func() time.Time, inputHash string) *corev1.Secret {
 
 	pullSecret := &corev1.Secret{
 		Type: corev1.SecretTypeDockerConfigJson,
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				ACRPullBindingLabel: acrBinding.ObjectMeta.Name,
+				ACRPullBindingLabel: acrBinding.GetName(),
 			},
 			Annotations: map[string]string{
 				tokenExpiryAnnotation:  expiry.Format(time.RFC3339),
 				tokenRefreshAnnotation: now().Format(time.RFC3339),
 				tokenInputsAnnotation:  inputHash,
 			},
-			Name:      pullSecretName(acrBinding.Name),
-			Namespace: acrBinding.Namespace,
+			Name:      pullSecretName(acrBinding.GetName()),
+			Namespace: acrBinding.GetNamespace(),
 		},
 		Data: map[string][]byte{
 			dockerConfigKey: []byte(dockerConfig),
