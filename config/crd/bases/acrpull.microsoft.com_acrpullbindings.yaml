@@ -46,6 +46,24 @@ spec:
                 description: ACR holds specifics of the Azure Container Registry for
                   which credentials are projected.
                 properties:
+                  cloudConfig:
+                    description: AirgappedCloudConfiguration configures a custom cloud
+                      to interact with when running air-gapped.
+                    properties:
+                      entraAuthorityHost:
+                        description: EntraAuthorityHost configures a custom Entra
+                          host endpoint.
+                        minLength: 1
+                        type: string
+                      resourceManagerAudience:
+                        description: ResourceManagerAudience configures the audience
+                          for which tokens will be requested from Entra.
+                        minLength: 1
+                        type: string
+                    required:
+                    - entraAuthorityHost
+                    - resourceManagerAudience
+                    type: object
                   environment:
                     default: PublicCloud
                     description: Environment specifies the Azure Cloud environment
@@ -54,6 +72,7 @@ spec:
                     - PublicCloud
                     - USGovernmentCloud
                     - ChinaCloud
+                    - AirgappedCloud
                     example: PublicCloud
                     type: string
                   scope:
@@ -84,6 +103,11 @@ spec:
                 - scope
                 - server
                 type: object
+                x-kubernetes-validations:
+                - message: a custom cloud configuration must be present for air-gapped
+                    cloud environments
+                  rule: 'self.environment == ''ArigappedCloud'' ? has(self.cloudConfig)
+                    : !has(self.cloudConfig)'
               auth:
                 description: Auth determines how we will authenticate to the Azure
                   Container Registry. Only one method may be provided.

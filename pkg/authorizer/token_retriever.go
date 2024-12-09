@@ -32,7 +32,7 @@ func AcquireARMToken(ctx context.Context, id azidentity.ManagedIDKind) (azcore.A
 }
 
 func ARMTokenForBinding(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
-	env := environment(spec.ACR.Environment)
+	env := environment(spec.ACR.Environment, spec.ACR.CloudConfig)
 
 	var credential azcore.TokenCredential
 	var err error
@@ -71,7 +71,7 @@ func ARMTokenForBinding(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindi
 	return credential.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{env.Services[cloud.ResourceManager].Audience + "/.default"}})
 }
 
-func environment(input msiacrpullv1beta2.AzureEnvironmentType) cloud.Configuration {
+func environment(input msiacrpullv1beta2.AzureEnvironmentType, config *msiacrpullv1beta2.AirgappedCloudConfiguration) cloud.Configuration {
 	switch input {
 	case msiacrpullv1beta2.AzureEnvironmentPublicCloud:
 		return cloud.AzurePublic
@@ -79,6 +79,15 @@ func environment(input msiacrpullv1beta2.AzureEnvironmentType) cloud.Configurati
 		return cloud.AzureGovernment
 	case msiacrpullv1beta2.AzureEnvironmentChinaCloud:
 		return cloud.AzureChina
+	case msiacrpullv1beta2.AzureEnvironmentAirgappedCloud:
+		return cloud.Configuration{
+			ActiveDirectoryAuthorityHost: config.EntraAuthorityHost,
+			Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
+				cloud.ResourceManager: {
+					Audience: config.ResourceManagerAudience,
+				},
+			},
+		}
 	default:
 		panic(fmt.Errorf("unsupported msiacrpullv1beta2.AzureEnvironmentType: %s", input))
 	}

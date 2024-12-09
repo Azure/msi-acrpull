@@ -46,6 +46,8 @@ type AcrPullBindingSpec struct {
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="self.environment == 'ArigappedCloud' ? has(self.cloudConfig) : !has(self.cloudConfig)", message="a custom cloud configuration must be present for air-gapped cloud environments"
+
 // AcrConfiguration identifies the Azure Container Registry we wish to bind to and how we will bind to it.
 type AcrConfiguration struct {
 	// +kubebuilder:validation:Required
@@ -70,12 +72,17 @@ type AcrConfiguration struct {
 	Scope string `json:"scope"`
 
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=PublicCloud;USGovernmentCloud;ChinaCloud
+	// +kubebuilder:validation:Enum=PublicCloud;USGovernmentCloud;ChinaCloud;AirgappedCloud
 	// +kubebuilder:default=PublicCloud
 	// +kubebuilder:example=PublicCloud
 
 	// Environment specifies the Azure Cloud environment in which the ACR is deployed.
 	Environment AzureEnvironmentType `json:"environment"`
+
+	// +kubebuilder:validation:Optional
+
+	// AirgappedCloudConfiguration configures a custom cloud to interact with when running air-gapped.
+	CloudConfig *AirgappedCloudConfiguration `json:"cloudConfig,omitempty"`
 }
 
 // AzureEnvironmentType represents a set of endpoints for each of Azure's Clouds.
@@ -85,7 +92,22 @@ const (
 	AzureEnvironmentPublicCloud       AzureEnvironmentType = "PublicCloud"
 	AzureEnvironmentUSGovernmentCloud AzureEnvironmentType = "USGovernmentCloud"
 	AzureEnvironmentChinaCloud        AzureEnvironmentType = "ChinaCloud"
+	AzureEnvironmentAirgappedCloud    AzureEnvironmentType = "AirgappedCloud"
 )
+
+type AirgappedCloudConfiguration struct {
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+
+	// EntraAuthorityHost configures a custom Entra host endpoint.
+	EntraAuthorityHost string `json:"entraAuthorityHost"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+
+	// ResourceManagerAudience configures the audience for which tokens will be requested from Entra.
+	ResourceManagerAudience string `json:"resourceManagerAudience"`
+}
 
 // +kubebuilder:validation:XValidation:rule="[has(self.managedIdentity), has(self.workloadIdentity)].exists_one(x, x)", message="only one authentication type can be set"
 
