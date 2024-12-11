@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 	"testing"
 	"time"
@@ -15,15 +16,145 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	azworkloadidentity "github.com/Azure/azure-workload-identity/pkg/webhook"
+
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
+	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 )
 
 func TestManagedIdentityPulls(t *testing.T) {
+	testACRPullBinding[*msiacrpullv1beta1.AcrPullBinding](t, "v1beta1-msi-", func(namespace, name, scope, serviceAccount string, cfg *Config) *msiacrpullv1beta1.AcrPullBinding {
+		return &msiacrpullv1beta1.AcrPullBinding{
+			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+			Spec: msiacrpullv1beta1.AcrPullBindingSpec{
+				AcrServer:                 cfg.RegistryFQDN,
+				Scope:                     scope,
+				ManagedIdentityResourceID: cfg.PullerResourceID,
+				ServiceAccountName:        serviceAccount,
+			},
+		}
+	}, false, func(prefix string, cfg *Config, ctx context.Context, client crclient.Client, nodeSelector map[string]string, t *testing.T) {
+		t.Run("pulls succeed with acrpullbinding", func(t *testing.T) {
+			t.Parallel()
+
+			namespace := prefix + "success"
+			t.Logf("creating namespace %s", namespace)
+			if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil && !errors.IsAlreadyExists(err) {
+				t.Fatalf("failed to create namespace %s: %v", namespace, err)
+			}
+
+			t.Cleanup(func() {
+				if _, skip := os.LookupEnv("SKIP_CLEANUP"); skip {
+					return
+				}
+				if err := client.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil {
+					t.Logf("failed to delete namespace %s: %v", namespace, err)
+				}
+			})
+
+			const serviceAccount = "sa"
+			t.Logf("creating service account %s/%s", namespace, serviceAccount)
+			sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: serviceAccount}}
+			if err := client.Create(ctx, sa); err != nil && !errors.IsAlreadyExists(err) {
+				t.Fatalf("failed to create service account %s/%s: %v", namespace, serviceAccount, err)
+			}
+
+			const pullBinding = "pull-binding"
+			t.Logf("creating pull binding %s/%s", namespace, pullBinding)
+			if err := client.Create(ctx, &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pullBinding},
+				Spec: msiacrpullv1beta1.AcrPullBindingSpec{
+					AcrServer:                 cfg.RegistryFQDN,
+					ManagedIdentityResourceID: cfg.PullerResourceID,
+					ServiceAccountName:        serviceAccount,
+				},
+			}); err != nil {
+				t.Fatalf("failed to create pull binding %s/%s: %v", namespace, pullBinding, err)
+			}
+			eventuallyFulfillPullBinding[*msiacrpullv1beta1.AcrPullBinding](t, ctx, client, namespace, pullBinding, func(namespace, name string) *msiacrpullv1beta1.AcrPullBinding {
+				return &msiacrpullv1beta1.AcrPullBinding{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+				}
+			})
+
+			for name, image := range map[string]string{
+				"alice": cfg.AliceImage,
+				"bob":   cfg.BobImage,
+			} {
+				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+					t.Logf("creating pod %s/%s", namespace, name)
+					if err := client.Create(ctx, &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name:            "main",
+								Image:           image,
+								Command:         []string{"/usr/bin/sleep"},
+								Args:            []string{"infinity"},
+								ImagePullPolicy: corev1.PullAlways,
+							}},
+							ServiceAccountName: serviceAccount,
+							NodeSelector:       nodeSelector,
+						},
+					}); err != nil {
+						t.Fatalf("failed to create Pod %s/%s: %v", namespace, name, err)
+					}
+
+					eventuallyPullImage(t, ctx, client, namespace, name)
+				})
+			}
+
+			const pod = "fail"
+			t.Logf("creating pod without service account %s/%s", namespace, pod)
+			if err := client.Create(ctx, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pod},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:            "main",
+						Image:           cfg.AliceImage,
+						Command:         []string{"/usr/bin/sleep"},
+						Args:            []string{"infinity"},
+						ImagePullPolicy: corev1.PullAlways,
+					}},
+					NodeSelector: nodeSelector,
+				},
+			}); err != nil {
+				t.Fatalf("failed to create Pod %s: %v", namespace, err)
+			}
+
+			eventuallyFailToPullImage(t, ctx, client, namespace, pod)
+		})
+	})
+
+}
+
+type binding interface {
+	*msiacrpullv1beta1.AcrPullBinding | *msiacrpullv1beta2.AcrPullBinding
+	crclient.Object
+}
+
+// bindingMinter is a constructor for a non-nil pointer to a binding, since we can't create that with `B`
+type bindingMinter[B binding] func(namespace, name, scope, serviceAccount string, cfg *Config) B
+
+// bindingGetter fetches a binding using the client, which we can't do since we need a non-nil pointer to the binding for the controller-runtime client
+type bindingGetter[B binding] func(client crclient.Client, namespace, name string) func(ctx context.Context) (B, error)
+
+func testACRPullBinding[B binding](
+	t *testing.T, prefix string,
+	createBinding bindingMinter[B],
+	annotateServiceAccount bool,
+	extraTests ...func(prefix string, cfg *Config, ctx context.Context, client crclient.Client, nodeSelector map[string]string, t *testing.T)) {
 	t.Parallel()
 
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// newBinding is a simple constructor for a binding when we don't care about the content of the object
+	newBinding := func(namespace, name string) B {
+		return createBinding(namespace, name, "", "", cfg)
 	}
 
 	parts := strings.Split(cfg.LabelSelector, "=")
@@ -37,7 +168,8 @@ func TestManagedIdentityPulls(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx := context.Background()
+	ctx, interruptCancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	t.Cleanup(interruptCancel)
 	if deadline, ok := t.Deadline(); ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, deadline)
@@ -47,7 +179,7 @@ func TestManagedIdentityPulls(t *testing.T) {
 	t.Run("pulls fail by default", func(t *testing.T) {
 		t.Parallel()
 
-		const namespace = "fail"
+		namespace := prefix + "fail"
 		t.Logf("creating namespace %s", namespace)
 		if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil && !errors.IsAlreadyExists(err) {
 			t.Fatalf("failed to create namespace %s: %v", namespace, err)
@@ -83,97 +215,10 @@ func TestManagedIdentityPulls(t *testing.T) {
 		eventuallyFailToPullImage(t, ctx, client, namespace, pod)
 	})
 
-	t.Run("pulls succeed with acrpullbinding", func(t *testing.T) {
-		t.Parallel()
-
-		const namespace = "success"
-		t.Logf("creating namespace %s", namespace)
-		if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil && !errors.IsAlreadyExists(err) {
-			t.Fatalf("failed to create namespace %s: %v", namespace, err)
-		}
-
-		t.Cleanup(func() {
-			if _, skip := os.LookupEnv("SKIP_CLEANUP"); skip {
-				return
-			}
-			if err := client.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil {
-				t.Logf("failed to delete namespace %s: %v", namespace, err)
-			}
-		})
-
-		const serviceAccount = "sa"
-		t.Logf("creating service account %s/%s", namespace, serviceAccount)
-		if err := client.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: serviceAccount}}); err != nil && !errors.IsAlreadyExists(err) {
-			t.Fatalf("failed to create service account %s/%s: %v", namespace, serviceAccount, err)
-		}
-
-		const pullBinding = "pull-binding"
-		t.Logf("creating pull binding %s/%s", namespace, pullBinding)
-		if err := client.Create(ctx, &msiacrpullv1beta1.AcrPullBinding{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pullBinding},
-			Spec: msiacrpullv1beta1.AcrPullBindingSpec{
-				AcrServer:                 cfg.RegistryFQDN,
-				ManagedIdentityResourceID: cfg.PullerResourceID,
-				ServiceAccountName:        serviceAccount,
-			},
-		}); err != nil {
-			t.Fatalf("failed to create pull binding %s/%s: %v", namespace, pullBinding, err)
-		}
-		eventuallyFulfillPullBinding(t, ctx, client, namespace, pullBinding)
-
-		for name, image := range map[string]string{
-			"alice": cfg.AliceImage,
-			"bob":   cfg.BobImage,
-		} {
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-				t.Logf("creating pod %s/%s", namespace, name)
-				if err := client.Create(ctx, &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{{
-							Name:            "main",
-							Image:           image,
-							Command:         []string{"/usr/bin/sleep"},
-							Args:            []string{"infinity"},
-							ImagePullPolicy: corev1.PullAlways,
-						}},
-						ServiceAccountName: serviceAccount,
-						NodeSelector:       nodeSelector,
-					},
-				}); err != nil {
-					t.Fatalf("failed to create Pod %s/%s: %v", namespace, name, err)
-				}
-
-				eventuallyPullImage(t, ctx, client, namespace, name)
-			})
-		}
-
-		const pod = "fail"
-		t.Logf("creating pod without service account %s/%s", namespace, pod)
-		if err := client.Create(ctx, &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pod},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{
-					Name:            "main",
-					Image:           cfg.AliceImage,
-					Command:         []string{"/usr/bin/sleep"},
-					Args:            []string{"infinity"},
-					ImagePullPolicy: corev1.PullAlways,
-				}},
-				NodeSelector: nodeSelector,
-			},
-		}); err != nil {
-			t.Fatalf("failed to create Pod %s: %v", namespace, err)
-		}
-
-		eventuallyFailToPullImage(t, ctx, client, namespace, pod)
-	})
-
 	t.Run("removal of acrpullbinding cleans up credentials", func(t *testing.T) {
 		t.Parallel()
 
-		const namespace = "mutation"
+		namespace := prefix + "mutation"
 		t.Logf("creating namespace %s", namespace)
 		if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil && !errors.IsAlreadyExists(err) {
 			t.Fatalf("failed to create namespace %s: %v", namespace, err)
@@ -189,24 +234,24 @@ func TestManagedIdentityPulls(t *testing.T) {
 		})
 
 		const serviceAccount = "sa"
+		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: serviceAccount}}
+		if annotateServiceAccount {
+			sa.Annotations = map[string]string{
+				azworkloadidentity.ClientIDAnnotation: cfg.PullerClientID,
+				azworkloadidentity.TenantIDAnnotation: cfg.PullerTenantID,
+			}
+		}
 		t.Logf("creating service account %s/%s", namespace, serviceAccount)
-		if err := client.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: serviceAccount}}); err != nil && !errors.IsAlreadyExists(err) {
+		if err := client.Create(ctx, sa); err != nil && !errors.IsAlreadyExists(err) {
 			t.Fatalf("failed to create service account %s/%s: %v", namespace, serviceAccount, err)
 		}
 
 		const pullBinding = "pull-binding"
 		t.Logf("creating pull binding %s/%s", namespace, pullBinding)
-		if err := client.Create(ctx, &msiacrpullv1beta1.AcrPullBinding{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pullBinding},
-			Spec: msiacrpullv1beta1.AcrPullBindingSpec{
-				AcrServer:                 cfg.RegistryFQDN,
-				ManagedIdentityResourceID: cfg.PullerResourceID,
-				ServiceAccountName:        serviceAccount,
-			},
-		}); err != nil {
+		if err := client.Create(ctx, createBinding(namespace, pullBinding, "repository:alice:pull", serviceAccount, cfg)); err != nil {
 			t.Fatalf("failed to create pull binding %s/%s: %v", namespace, pullBinding, err)
 		}
-		eventuallyFulfillPullBinding(t, ctx, client, namespace, pullBinding)
+		eventuallyFulfillPullBinding[B](t, ctx, client, namespace, pullBinding, newBinding)
 
 		const name = "alice"
 		t.Logf("creating pod %s/%s", namespace, name)
@@ -229,23 +274,23 @@ func TestManagedIdentityPulls(t *testing.T) {
 
 		eventuallyPullImage(t, ctx, client, namespace, name)
 
-		if err := client.Delete(ctx, &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pullBinding}}); err != nil {
+		if err := client.Delete(ctx, newBinding(namespace, pullBinding)); err != nil {
 			t.Fatalf("failed to remove pull binding %s/%s: %v", namespace, pullBinding, err)
 		}
 
 		EventuallyObject(t, ctx, fmt.Sprintf("ACRPullBinding %s/%s to be deleted", namespace, pullBinding),
-			func(ctx context.Context) (*msiacrpullv1beta1.AcrPullBinding, error) {
-				thisBinding := msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pullBinding}}
-				err := client.Get(ctx, crclient.ObjectKeyFromObject(&thisBinding), &thisBinding)
+			func(ctx context.Context) (B, error) {
+				thisBinding := newBinding(namespace, pullBinding)
+				err := client.Get(ctx, crclient.ObjectKeyFromObject(thisBinding), thisBinding)
 				if errors.IsNotFound(err) {
-					return &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Namespace: "deleted", Name: "deleted"}}, nil
+					return createBinding("deleted", "deleted", "", "", cfg), nil
 				}
-				return &thisBinding, err
+				return thisBinding, err
 			},
-			[]Predicate[*msiacrpullv1beta1.AcrPullBinding]{
-				func(binding *msiacrpullv1beta1.AcrPullBinding) (done bool, reasons string, err error) {
-					done = binding.ObjectMeta.Namespace == "deleted" && binding.ObjectMeta.Name == "deleted"
-					return done, fmt.Sprintf("wanted binding to be gone, got binding %s/%s", binding.Namespace, binding.Name), nil
+			[]Predicate[B]{
+				func(binding B) (done bool, reasons string, err error) {
+					done = binding.GetNamespace() == "deleted" && binding.GetName() == "deleted"
+					return done, fmt.Sprintf("wanted binding to be gone, got binding %s/%s", binding.GetNamespace(), binding.GetName()), nil
 				},
 			},
 			WithTimeout(2*time.Minute),
@@ -276,7 +321,7 @@ func TestManagedIdentityPulls(t *testing.T) {
 	t.Run("scoped acrpullbinding only allows pulls within scope", func(t *testing.T) {
 		t.Parallel()
 
-		const namespace = "scoped"
+		namespace := prefix + "scoped"
 		t.Logf("creating namespace %s", namespace)
 		if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil && !errors.IsAlreadyExists(err) {
 			t.Fatalf("failed to create namespace %s: %v", namespace, err)
@@ -293,24 +338,23 @@ func TestManagedIdentityPulls(t *testing.T) {
 
 		const serviceAccount = "sa"
 		t.Logf("creating service account %s/%s", namespace, serviceAccount)
-		if err := client.Create(ctx, &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: serviceAccount}}); err != nil && !errors.IsAlreadyExists(err) {
+		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: serviceAccount}}
+		if annotateServiceAccount {
+			sa.Annotations = map[string]string{
+				azworkloadidentity.ClientIDAnnotation: cfg.PullerClientID,
+				azworkloadidentity.TenantIDAnnotation: cfg.PullerTenantID,
+			}
+		}
+		if err := client.Create(ctx, sa); err != nil && !errors.IsAlreadyExists(err) {
 			t.Fatalf("failed to create service account %s/%s: %v", namespace, serviceAccount, err)
 		}
 
 		const pullBinding = "pull-binding"
 		t.Logf("creating pull binding %s/%s", namespace, pullBinding)
-		if err := client.Create(ctx, &msiacrpullv1beta1.AcrPullBinding{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pullBinding},
-			Spec: msiacrpullv1beta1.AcrPullBindingSpec{
-				AcrServer:                 cfg.RegistryFQDN,
-				ManagedIdentityResourceID: cfg.PullerResourceID,
-				ServiceAccountName:        serviceAccount,
-				Scope:                     "repository:alice:pull",
-			},
-		}); err != nil {
+		if err := client.Create(ctx, createBinding(namespace, pullBinding, "repository:alice:pull", serviceAccount, cfg)); err != nil {
 			t.Fatalf("failed to create pull binding %s/%s: %v", namespace, pullBinding, err)
 		}
-		eventuallyFulfillPullBinding(t, ctx, client, namespace, pullBinding)
+		eventuallyFulfillPullBinding[B](t, ctx, client, namespace, pullBinding, newBinding)
 
 		type imageMeta struct {
 			image   string
@@ -378,19 +422,31 @@ func TestManagedIdentityPulls(t *testing.T) {
 
 		eventuallyFailToPullImage(t, ctx, client, namespace, pod)
 	})
+
+	for _, test := range extraTests {
+		test(prefix, cfg, ctx, client, nodeSelector, t)
+	}
 }
 
-func eventuallyFulfillPullBinding(t *testing.T, ctx context.Context, client crclient.Client, namespace, name string) {
+func eventuallyFulfillPullBinding[B binding](t *testing.T, ctx context.Context, client crclient.Client, namespace, name string, newBinding func(namespace, name string) B) {
 	EventuallyObject(t, ctx, fmt.Sprintf("ACRPullBinding %s/%s to have credentials propagated", namespace, name),
-		func(ctx context.Context) (*msiacrpullv1beta1.AcrPullBinding, error) {
-			thisBinding := msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
-			err := client.Get(ctx, crclient.ObjectKeyFromObject(&thisBinding), &thisBinding)
-			return &thisBinding, err
+		func(ctx context.Context) (B, error) {
+			thisBinding := newBinding(namespace, name)
+			err := client.Get(ctx, crclient.ObjectKeyFromObject(thisBinding), thisBinding)
+			return thisBinding, err
 		},
-		[]Predicate[*msiacrpullv1beta1.AcrPullBinding]{
-			func(binding *msiacrpullv1beta1.AcrPullBinding) (done bool, reasons string, err error) {
-				done = binding.Status.Error == "" && binding.Status.LastTokenRefreshTime != nil && binding.Status.TokenExpirationTime != nil
-				return done, fmt.Sprintf("wanted refresh times to be published without error, got error=%s, refresh=%s, expiration=%s", binding.Status.Error, binding.Status.LastTokenRefreshTime, binding.Status.TokenExpirationTime), nil
+		[]Predicate[B]{
+			func(binding B) (done bool, reasons string, err error) {
+				switch theBinding := any(binding).(type) {
+				case *msiacrpullv1beta1.AcrPullBinding:
+					done = theBinding.Status.Error == "" && theBinding.Status.LastTokenRefreshTime != nil && theBinding.Status.TokenExpirationTime != nil
+					return done, fmt.Sprintf("wanted refresh times to be published without error, got error=%s, refresh=%s, expiration=%s", theBinding.Status.Error, theBinding.Status.LastTokenRefreshTime, theBinding.Status.TokenExpirationTime), nil
+				case *msiacrpullv1beta2.AcrPullBinding:
+					done = theBinding.Status.Error == "" && theBinding.Status.LastTokenRefreshTime != nil && theBinding.Status.TokenExpirationTime != nil
+					return done, fmt.Sprintf("wanted refresh times to be published without error, got error=%s, refresh=%s, expiration=%s", theBinding.Status.Error, theBinding.Status.LastTokenRefreshTime, theBinding.Status.TokenExpirationTime), nil
+				default:
+					panic(fmt.Errorf("programmer error: got %T in predicate", binding))
+				}
 			},
 		},
 		WithTimeout(2*time.Minute),
