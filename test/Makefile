@@ -91,35 +91,34 @@ _output/config:
 	rm -rf _output/config
 	cp -r ./../config _output/config
 
-_output/deploy/crd: _output/aks.kubeconfig _output/config $(KUSTOMIZE) _output/deploy
-	$(KUSTOMIZE) build _output/config/crd | kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f -
-	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.msi-acrpull.microsoft.com
-	touch $@
-
-deploy-crd:
-	$(KUSTOMIZE) build _output/config/crd | kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f -
-	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.msi-acrpull.microsoft.com
-
 _output/deploy/new-image: _output/deploy/previous _output/deploy/image
 	touch $@
 
 _output/deploy/image: _output/image
 _output/deploy/previous-image: _output/previous-image
-_output/deploy/image _output/deploy/previous-image: _output/aks.kubeconfig $(KUSTOMIZE) _output/deploy/prometheus-crds _output/system-vmss-puller.json _output/deploy/crd
-	cd _output/config/manager && $(KUSTOMIZE) edit set image controller="$(shell cat _output/$(notdir $@) )" && cd -
-	$(KUSTOMIZE) build _output/config/default | kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f -
-	kubectl --kubeconfig _output/aks.kubeconfig --namespace msi-acrpull-system wait --for condition=Available deployment/msi-acrpull-controller-manager --timeout 120s
+_output/deploy/image _output/deploy/previous-image: _output/aks.kubeconfig $(HELM) _output/deploy/prometheus-crds _output/system-vmss-puller.json
+	cp values.template.yaml _output/values.yaml
+	sed -i -e 's|IMAGE_DIGEST|$(shell cat _output/$(notdir $@) )|' _output/values.yaml
+	$(HELM) template --kubeconfig _output/aks.kubeconfig acrpull ./../config/helm --values _output/values.yaml --create-namespace --dry-run=server > _output/chart.yaml
+	kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f _output/chart.yaml
+	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.msi-acrpull.microsoft.com
+	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.acrpull.microsoft.com
+	kubectl --kubeconfig _output/aks.kubeconfig --namespace acrpull wait --for condition=Available deployment/acrpull --timeout 120s
 	touch $@
 
 deploy:
-	cd _output/config/manager && $(KUSTOMIZE) edit set image controller="$(shell cat _output/image )" && cd -
-	$(KUSTOMIZE) build _output/config/default | kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f -
-	kubectl --kubeconfig _output/aks.kubeconfig --namespace msi-acrpull-system wait --for condition=Available deployment/msi-acrpull-controller-manager --timeout 120s
+	cp values.template.yaml _output/values.yaml
+	sed -i -e 's|IMAGE_DIGEST|$(shell cat _output/image )|' _output/values.yaml
+	$(HELM) template --kubeconfig _output/aks.kubeconfig acrpull ./../config/helm --values _output/values.yaml --create-namespace --dry-run=server > _output/chart.yaml
+	kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f _output/chart.yaml
+	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.msi-acrpull.microsoft.com
+	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.acrpull.microsoft.com
+	kubectl --kubeconfig _output/aks.kubeconfig --namespace acrpull wait --for condition=Available deployment/acrpull --timeout 120s
 
 _output/deploy/previous: _output/deploy/previous-image _output/system-vmss-puller.json
 	cp pullbinding.template.yaml _output/pullbinding.yaml
 	sed -i -e 's|MANAGED_IDENTITY_RESOURCE_ID|$(shell jq --raw-output '.properties.outputs.acr.value.pullerIdentity.value' < _output/infrastructure.json )|g' -e 's|ACR_SERVER|$(shell jq --raw-output '.properties.outputs.acr.value.registryName.value' < _output/infrastructure.json).azurecr.io|g' _output/pullbinding.yaml
-	kubectl --kubeconfig _output/aks.kubeconfig apply -f _output/pullbinding.yaml
+	kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f _output/pullbinding.yaml
 	kubectl --kubeconfig _output/aks.kubeconfig wait --for 'jsonpath={.imagePullSecrets[0]}' --namespace default serviceaccount/default
 	touch $@
 

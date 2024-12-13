@@ -1,4 +1,0 @@
-resources:
-  - policies.yaml
-  - bindings.yaml
-  - parameters.yaml

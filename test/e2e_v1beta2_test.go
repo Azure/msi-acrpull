@@ -137,8 +137,7 @@ func TestValidatingAdmissionPolicies(t *testing.T) {
 
 	var configMaps corev1.ConfigMapList
 	if err := client.List(ctx, &configMaps, crclient.MatchingLabels{
-		"app.kubernetes.io/part-of":   "msi-acrpull",
-		"app.kubernetes.io/component": "validatingadmissionpolicy",
+		"app.kubernetes.io/name": "acrpull",
 	}); err != nil {
 		t.Fatalf("failed to list validating admission policy configurations: %v", err)
 	}
@@ -148,9 +147,9 @@ func TestValidatingAdmissionPolicies(t *testing.T) {
 	configuration := configMaps.Items[0]
 	var serviceAccountNamespace, serviceAccountName, tokenAudience string
 	for from, into := range map[string]*string{
-		"controllerNamespace": &serviceAccountNamespace,
-		"controllerName":      &serviceAccountName,
-		"tokenAudience":       &tokenAudience,
+		"controllerNamespace":          &serviceAccountNamespace,
+		"controllerServiceAccountName": &serviceAccountName,
+		"tokenAudience":                &tokenAudience,
 	} {
 		value, set := configuration.Data[from]
 		if !set {
