@@ -35,6 +35,12 @@ $(GOLANGCI_LINT): $(BINGO_DIR)/golangci-lint.mod
 	@echo "(re)installing $(GOBIN)/golangci-lint-v1.59.1"
 	@cd $(BINGO_DIR) && GOWORK=off $(GO) build -mod=mod -modfile=golangci-lint.mod -o=$(GOBIN)/golangci-lint-v1.59.1 "github.com/golangci/golangci-lint/cmd/golangci-lint"
 
+HELM := $(GOBIN)/helm-v3.16.3
+$(HELM): $(BINGO_DIR)/helm.mod
+	@# Install binary/ries using Go 1.14+ build command. This is using bwplotka/bingo-controlled, separate go module with pinned dependencies.
+	@echo "(re)installing $(GOBIN)/helm-v3.16.3"
+	@cd $(BINGO_DIR) && GOWORK=off $(GO) build -mod=mod -modfile=helm.mod -o=$(GOBIN)/helm-v3.16.3 "helm.sh/helm/v3/cmd/helm"
+
 KUSTOMIZE := $(GOBIN)/kustomize-v5.2.1
 $(KUSTOMIZE): $(BINGO_DIR)/kustomize.mod
 	@# Install binary/ries using Go 1.14+ build command. This is using bwplotka/bingo-controlled, separate go module with pinned dependencies.

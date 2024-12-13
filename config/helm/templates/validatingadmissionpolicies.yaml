@@ -1,18 +1,16 @@
 # This policy validates the configuration of the tokens that are created by the msi-acrpull controller.
-# It requires the parameters controllerName, controllerNamespace, token expiration, and token audiences
-# to be set in the ConfigMap admission-policies-msi-acrpull-controller-config.
+# It requires the parameters controllerServiceAccountName, controllerNamespace, token expiration, and token audiences
+# to be set in the ConfigMap admission-policies-controller-config.
 # The user must configure:
 #   the token audiences
-#   the controllerName and controllerNamespace parameters
+#   the controllerServiceAccountName and controllerNamespace parameters
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: "controller-token-request-policy"
   labels:
-    app.kubernetes.io/component: validatingadmissionpolicy
-    app.kubernetes.io/created-by: msi-acrpull
-    app.kubernetes.io/part-of: msi-acrpull
-    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: acrpull
+    app.kubernetes.io/managed-by: Helm
 spec:
   failurePolicy: Fail
   paramKind:
@@ -20,7 +18,7 @@ spec:
     kind: ConfigMap
   matchConditions:
     - name: 'userIsController'
-      expression: "request.userInfo.username == 'system:serviceaccount:'+params.data.controllerNamespace+':'+params.data.controllerName"
+      expression: "request.userInfo.username == 'system:serviceaccount:'+params.data.controllerNamespace+':'+params.data.controllerServiceAccountName"
   matchConstraints:
     resourceRules:
       - apiGroups:   [""]
@@ -34,7 +32,7 @@ spec:
       expression: "object.spec.audiences.exists(w, w == params.data.tokenAudience)"
   validations:
     - expression: "variables.hasCorrectAudience == true && variables.requestHasOnlyOneAudience == true" # if the expression evaluates to false, the validation check is enforced according to the failurePolicy
-      messageExpression: "string(params.data.controllerName)  + ' has failed to ' +  string(request.operation) + ' ' + string(request.name) + ' token in the ' + string(request.namespace) + ' namespace. Check the configuration.'"
+      messageExpression: "string(params.data.controllerServiceAccountName)  + ' has failed to ' +  string(request.operation) + ' ' + string(request.name) + ' token in the ' + string(request.namespace) + ' namespace. Check the configuration.'"
       reason: "Forbidden"
 ---
 # This policy is used to restrict the types of secrets that the controller can create or update. We only allow the controller
@@ -42,18 +40,16 @@ spec:
 # (For example, service account token secret types get auto-populated with tokens.)
 # We furthermore restrict the controller to creating and updating secrets with the label we use for limiting our informers.
 # It requires the parameter controllerName, controllerNamespace and the list of secret types to allow to be set in the
-# ConfigMap admission-policies-msi-acrpull-controller-config.
+# ConfigMap admission-policies-controller-config.
 # The user must configure:
-#   the controllerName and controllerNamespace parameters
+#   the controllerServiceAccountName and controllerNamespace parameters
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: "controller-secret-mutation-policy"
   labels:
-    app.kubernetes.io/component: validatingadmissionpolicy
-    app.kubernetes.io/created-by: msi-acrpull
-    app.kubernetes.io/part-of: msi-acrpull
-    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: acrpull
+    app.kubernetes.io/managed-by: Helm
 spec:
   failurePolicy: Fail
   paramKind:
@@ -61,7 +57,7 @@ spec:
     kind: ConfigMap
   matchConditions:
     - name: 'userIsController'
-      expression: "request.userInfo.username == 'system:serviceaccount:'+params.data.controllerNamespace+':'+params.data.controllerName"
+      expression: "request.userInfo.username == 'system:serviceaccount:'+params.data.controllerNamespace+':'+params.data.controllerServiceAccountName"
   matchConstraints:
     resourceRules:
       - apiGroups:   [""]
@@ -83,23 +79,21 @@ spec:
       expression: "has(oldObject.metadata) ? oldObject.metadata.labels == object.metadata.labels : true"
   validations:
     - expression: "variables.hasOwner == true && variables.matchesPreviousOwner == true && variables.hasSecretType == true && variables.matchesPreviousSecretType == true && variables.hasLabel == true && variables.matchesPreviousLabel == true"
-      messageExpression: "string(params.data.controllerName)  + ' has failed to ' +  string(request.operation) + ' secret with ' + string(object.type) + ' type ' + 'in the ' + string(request.namespace) + ' namespace. The controller can only create or update secrets that it owns, with the correct type and having the correct label.'"
+      messageExpression: "string(params.data.controllerServiceAccountName)  + ' has failed to ' +  string(request.operation) + ' secret with ' + string(object.type) + ' type ' + 'in the ' + string(request.namespace) + ' namespace. The controller can only create or update secrets that it owns, with the correct type and having the correct label.'"
       reason: "Forbidden"
 ---
 # This policy will deny updates to serviceAccounts that do something other than changing the list of managed pull secrets.
-# It requires the parameter controllerName and controllerNamespace to be set in the
-# ConfigMap admission-policies-msi-acrpull-controller-config.
+# It requires the parameter controllerServiceAccountName and controllerNamespace to be set in the
+# ConfigMap admission-policies-controller-config.
 # The user must configure:
-#   the controllerName and controllerNamespace parameters
+#   the controllerServiceAccountName and controllerNamespace parameters
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: "controller-service-account-mutation-policy"
   labels:
-    app.kubernetes.io/component: validatingadmissionpolicy
-    app.kubernetes.io/created-by: msi-acrpull
-    app.kubernetes.io/part-of: msi-acrpull
-    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: acrpull
+    app.kubernetes.io/managed-by: Helm
 spec:
   failurePolicy: Fail
   paramKind:
@@ -107,7 +101,7 @@ spec:
     kind: ConfigMap
   matchConditions:
     - name: 'userIsController'
-      expression: "request.userInfo.username == 'system:serviceaccount:'+params.data.controllerNamespace+':'+params.data.controllerName"
+      expression: "request.userInfo.username == 'system:serviceaccount:'+params.data.controllerNamespace+':'+params.data.controllerServiceAccountName"
   matchConstraints:
     resourceRules:
       - apiGroups:   [""]
@@ -133,5 +127,5 @@ spec:
       expression: "variables.removedPullSecrets.all(s, s.matches('^acr-pull-.{1,44}-[a-zA-Z0-9]{10}$'))"
   validations:
     - expression: "variables.secretsUnchanged == true && variables.automountUnchanged == true && variables.onlyCorrectPullSecretsAdded == true && variables.onlyCorrectPullSecretsRemoved == true"
-      messageExpression: "string(params.data.controllerName) + ' has failed to ' + string(request.operation) + ' service account ' + string(request.name) + ' in the ' + string(request.namespace) + ' namespace. The controller may only update service accounts to add or remove pull secrets that the controller manages.' + string(variables.automountUnchanged == true) + string(variables.automountUnchanged == true) + string(variables.onlyCorrectPullSecretsAdded == true) + string(variables.onlyCorrectPullSecretsRemoved == true)"
+      messageExpression: "string(params.data.controllerServiceAccountName) + ' has failed to ' + string(request.operation) + ' service account ' + string(request.name) + ' in the ' + string(request.namespace) + ' namespace. The controller may only update service accounts to add or remove pull secrets that the controller manages.' + string(variables.automountUnchanged == true) + string(variables.automountUnchanged == true) + string(variables.onlyCorrectPullSecretsAdded == true) + string(variables.onlyCorrectPullSecretsRemoved == true)"
       reason: "Forbidden"

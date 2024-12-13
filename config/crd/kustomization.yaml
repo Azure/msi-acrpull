@@ -1,3 +1,0 @@
-resources:
-- bases/msi-acrpull.microsoft.com_acrpullbindings.yaml
-- bases/acrpull.microsoft.com_acrpullbindings.yaml
