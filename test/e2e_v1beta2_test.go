@@ -62,7 +62,62 @@ func TestWorkloadIdentityPulls_v1beta2(t *testing.T) {
 				ServiceAccountName: serviceAccount,
 			},
 		}
-	}, true)
+	}, true, func(prefix string, cfg *Config, ctx context.Context, client crclient.Client, nodeSelector map[string]string, t *testing.T) {
+		t.Run("pulls succeed with acrpullbinding referencing non-default service account", func(t *testing.T) {
+			t.Parallel()
+
+			namespace := prefix + "nondefault"
+			t.Logf("creating namespace %s", namespace)
+			if err := client.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil && !errors.IsAlreadyExists(err) {
+				t.Fatalf("failed to create namespace %s: %v", namespace, err)
+			}
+
+			t.Cleanup(func() {
+				if _, skip := os.LookupEnv("SKIP_CLEANUP"); skip {
+					return
+				}
+				if err := client.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil {
+					t.Logf("failed to delete namespace %s: %v", namespace, err)
+				}
+			})
+
+			const serviceAccount = "sa"
+			t.Logf("creating service account %s/%s", namespace, serviceAccount)
+			sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: serviceAccount}}
+			if err := client.Create(ctx, sa); err != nil && !errors.IsAlreadyExists(err) {
+				t.Fatalf("failed to create service account %s/%s: %v", namespace, serviceAccount, err)
+			}
+
+			const pullBinding = "pull-binding"
+			t.Logf("creating pull binding %s/%s", namespace, pullBinding)
+			if err := client.Create(ctx, &msiacrpullv1beta2.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pullBinding},
+				Spec: msiacrpullv1beta2.AcrPullBindingSpec{
+					ACR: msiacrpullv1beta2.AcrConfiguration{
+						Server:      cfg.RegistryFQDN,
+						Scope:       "repository:alice:pull",
+						Environment: msiacrpullv1beta2.AzureEnvironmentPublicCloud,
+					},
+					Auth: msiacrpullv1beta2.AuthenticationMethod{
+						WorkloadIdentity: &msiacrpullv1beta2.WorkloadIdentityAuth{
+							ServiceAccountName: serviceAccount,
+							ClientID:           cfg.PullerClientID,
+							TenantID:           cfg.PullerTenantID,
+						},
+					},
+					ServiceAccountName: serviceAccount,
+				},
+			}); err != nil {
+				t.Fatalf("failed to create pull binding %s/%s: %v", namespace, pullBinding, err)
+			}
+			eventuallyFulfillPullBinding[*msiacrpullv1beta2.AcrPullBinding](t, ctx, client, namespace, pullBinding, func(namespace, name string) *msiacrpullv1beta2.AcrPullBinding {
+				return &msiacrpullv1beta2.AcrPullBinding{
+					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+				}
+			})
+			validateScopedPods(ctx, t, cfg, namespace, serviceAccount, client, nodeSelector)
+		})
+	})
 }
 
 func TestScopeRequired(t *testing.T) {

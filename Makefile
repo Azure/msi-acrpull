@@ -47,7 +47,8 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./..." output:crd:artifacts:config=config/helm/templates
+	$(CONTROLLER_GEN) rbac:roleName=acrpull-controller crd paths="./..." output:dir=config/helm/templates output:crd:artifacts:config=config/helm/templates
+	mv config/helm/templates/role.yaml config/helm/templates/controller_role.yaml
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) mocks ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

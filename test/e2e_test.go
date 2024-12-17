@@ -356,76 +356,80 @@ func testACRPullBinding[B binding](
 		}
 		eventuallyFulfillPullBinding[B](t, ctx, client, namespace, pullBinding, newBinding)
 
-		type imageMeta struct {
-			image   string
-			succeed bool
-		}
-		for name, imageCfg := range map[string]imageMeta{
-			"alice": {
-				image:   cfg.AliceImage,
-				succeed: true,
-			},
-			"bob": {
-				image:   cfg.BobImage,
-				succeed: false,
-			},
-		} {
-			what := "fails"
-			if imageCfg.succeed {
-				what = "succeeds"
-			}
-			t.Run(name+" "+what+" to pull the image", func(t *testing.T) {
-				t.Parallel()
-				t.Logf("creating pod %s/%s", namespace, name)
-				if err := client.Create(ctx, &corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{{
-							Name:            "main",
-							Image:           imageCfg.image,
-							Command:         []string{"/usr/bin/sleep"},
-							Args:            []string{"infinity"},
-							ImagePullPolicy: corev1.PullAlways,
-						}},
-						ServiceAccountName: serviceAccount,
-						NodeSelector:       nodeSelector,
-					},
-				}); err != nil {
-					t.Fatalf("failed to create Pod %s/%s: %v", namespace, name, err)
-				}
-
-				if imageCfg.succeed {
-					eventuallyPullImage(t, ctx, client, namespace, name)
-				} else {
-					eventuallyFailToPullImage(t, ctx, client, namespace, name)
-				}
-			})
-		}
-
-		const pod = "fail"
-		t.Logf("creating pod without service account %s/%s", namespace, pod)
-		if err := client.Create(ctx, &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pod},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{
-					Name:            "main",
-					Image:           cfg.AliceImage,
-					Command:         []string{"/usr/bin/sleep"},
-					Args:            []string{"infinity"},
-					ImagePullPolicy: corev1.PullAlways,
-				}},
-				NodeSelector: nodeSelector,
-			},
-		}); err != nil {
-			t.Fatalf("failed to create Pod %s: %v", namespace, err)
-		}
-
-		eventuallyFailToPullImage(t, ctx, client, namespace, pod)
+		validateScopedPods(ctx, t, cfg, namespace, serviceAccount, client, nodeSelector)
 	})
 
 	for _, test := range extraTests {
 		test(prefix, cfg, ctx, client, nodeSelector, t)
 	}
+}
+
+func validateScopedPods(ctx context.Context, t *testing.T, cfg *Config, namespace, serviceAccount string, client crclient.Client, nodeSelector map[string]string) {
+	type imageMeta struct {
+		image   string
+		succeed bool
+	}
+	for name, imageCfg := range map[string]imageMeta{
+		"alice": {
+			image:   cfg.AliceImage,
+			succeed: true,
+		},
+		"bob": {
+			image:   cfg.BobImage,
+			succeed: false,
+		},
+	} {
+		what := "fails"
+		if imageCfg.succeed {
+			what = "succeeds"
+		}
+		t.Run(name+" "+what+" to pull the image", func(t *testing.T) {
+			t.Parallel()
+			t.Logf("creating pod %s/%s", namespace, name)
+			if err := client.Create(ctx, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:            "main",
+						Image:           imageCfg.image,
+						Command:         []string{"/usr/bin/sleep"},
+						Args:            []string{"infinity"},
+						ImagePullPolicy: corev1.PullAlways,
+					}},
+					ServiceAccountName: serviceAccount,
+					NodeSelector:       nodeSelector,
+				},
+			}); err != nil {
+				t.Fatalf("failed to create Pod %s/%s: %v", namespace, name, err)
+			}
+
+			if imageCfg.succeed {
+				eventuallyPullImage(t, ctx, client, namespace, name)
+			} else {
+				eventuallyFailToPullImage(t, ctx, client, namespace, name)
+			}
+		})
+	}
+
+	const pod = "fail"
+	t.Logf("creating pod without service account %s/%s", namespace, pod)
+	if err := client.Create(ctx, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: pod},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:            "main",
+				Image:           cfg.AliceImage,
+				Command:         []string{"/usr/bin/sleep"},
+				Args:            []string{"infinity"},
+				ImagePullPolicy: corev1.PullAlways,
+			}},
+			NodeSelector: nodeSelector,
+		},
+	}); err != nil {
+		t.Fatalf("failed to create Pod %s: %v", namespace, err)
+	}
+
+	eventuallyFailToPullImage(t, ctx, client, namespace, pod)
 }
 
 func eventuallyFulfillPullBinding[B binding](t *testing.T, ctx context.Context, client crclient.Client, namespace, name string, newBinding func(namespace, name string) B) {

@@ -118,4 +118,17 @@ resource federatedCredentialScoped 'Microsoft.ManagedIdentity/userAssignedIdenti
   dependsOn: [federatedCredentialMutation]
 }
 
+resource federatedCredentialNonDefault 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
+  name: guid(aks.id, pullerIdentity.id, 'nondefault')
+  parent: pullerIdentity
+  properties: {
+    audiences: [
+      'api://AzureCRTokenExchange'
+    ]
+    issuer: aks.properties.oidcIssuerProfile.issuerURL
+    subject: 'system:serviceaccount:v1beta2-wi-nondefault:sa'
+  }
+  dependsOn: [federatedCredentialScoped]
+}
+
 output aks string = aks.name
