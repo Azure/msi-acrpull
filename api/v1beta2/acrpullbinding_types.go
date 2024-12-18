@@ -141,27 +141,49 @@ type ManagedIdentityAuth struct {
 	ResourceID string `json:"resourceID,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.clientID) && has(self.tenantID)) || (!has(self.clientID) && !has(self.tenantID))", message="custom client and tenant identifiers must be provided together, if at all"
+
 type WorkloadIdentityAuth struct {
 	// +kubebuilder:validation:Required
 
 	// ServiceAccountName specifies the name of the service account
 	// that should be used when authenticating with WorkloadIdentity.
 	ServiceAccountName string `json:"serviceAccountRef,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:example="1b461305-28be-5271-beda-bd9fd2e24251"
+
+	// ClientID holds an optional client identifier of a federated identity.
+	// Specify this identifier if multiple identities are federated with the
+	// service account and the identity to use for image pulling is not the
+	// default identity stored in the service account's annotations. The
+	// client and tenant ID must be specified together.
+	ClientID string `json:"clientID,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:example="72f988bf-86f1-41af-91ab-2d7cd011db47"
+
+	// TenantID holds an optional tenant identifier of a federated identity.
+	// Specify this identifier if multiple identities are federated with the
+	// service account and the identity to use for image pulling is not the
+	// default identity stored in the service account's annotations. The
+	// client and tenant ID must be specified together.
+	TenantID string `json:"tenantID,omitempty"`
 }
 
 // AcrPullBindingStatus defines the observed state of AcrPullBinding
 type AcrPullBindingStatus struct {
-	// +optional
+	// +kubebuilder:validation:Optional
 
 	// Information when was the last time the ACR token was refreshed.
 	LastTokenRefreshTime *metav1.Time `json:"lastTokenRefreshTime,omitempty"`
 
-	// +optional
+	// +kubebuilder:validation:Optional
 
 	// The expiration date of the current ACR token.
 	TokenExpirationTime *metav1.Time `json:"tokenExpirationTime,omitempty"`
 
-	// +optional
+	// +kubebuilder:validation:Optional
 
 	// Error message if there was an error updating the token.
 	Error string `json:"error,omitempty"`

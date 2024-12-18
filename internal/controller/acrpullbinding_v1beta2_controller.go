@@ -97,18 +97,23 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				var tenantId, clientId, token string
 				if binding.Spec.Auth.WorkloadIdentity != nil {
-					for _, annotation := range []struct { // n.b. we need an array here to be able to test for the error output
-						value string
-						into  *string
-					}{
-						{value: azworkloadidentity.ClientIDAnnotation, into: &clientId},
-						{value: azworkloadidentity.TenantIDAnnotation, into: &tenantId},
-					} {
-						value, set := serviceAccount.Annotations[annotation.value]
-						if !set {
-							return "", time.Time{}, fmt.Errorf("service account %s missing %s annotation", serviceAccount.Name, annotation.value)
+					if binding.Spec.Auth.WorkloadIdentity.TenantID != "" {
+						tenantId = binding.Spec.Auth.WorkloadIdentity.TenantID
+						clientId = binding.Spec.Auth.WorkloadIdentity.ClientID
+					} else {
+						for _, annotation := range []struct { // n.b. we need an array here to be able to test for the error output
+							value string
+							into  *string
+						}{
+							{value: azworkloadidentity.ClientIDAnnotation, into: &clientId},
+							{value: azworkloadidentity.TenantIDAnnotation, into: &tenantId},
+						} {
+							value, set := serviceAccount.Annotations[annotation.value]
+							if !set {
+								return "", time.Time{}, fmt.Errorf("service account %s missing %s annotation", serviceAccount.Name, annotation.value)
+							}
+							*annotation.into = value
 						}
-						*annotation.into = value
 					}
 
 					response, err := opts.mintToken(ctx, serviceAccount.Namespace, serviceAccount.Name)
