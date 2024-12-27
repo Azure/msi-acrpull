@@ -194,6 +194,11 @@ type AcrPullBindingStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="Server",type="string",JSONPath=".spec.acr.server",description="FQDN for the ACR.",priority=0
+// +kubebuilder:printcolumn:name="Scope",type="string",JSONPath=".spec.acr.scope",description="Scope for the ACR token.",priority=1
+// +kubebuilder:printcolumn:name="Last Refresh",type="date",JSONPath=".status.lastTokenRefreshTime",description="Time the token was last refreshed.",priority=1
+// +kubebuilder:printcolumn:name="Expiration",type="date",JSONPath=".status.tokenExpirationTime",description="Time the current token expires.",priority=0
+// +kubebuilder:printcolumn:name="Error",type="string",JSONPath=".status.error",description="Errors encountered during token generation, if any.",priority=0
 
 // AcrPullBinding is the Schema for the acrpullbindings API
 type AcrPullBinding struct {

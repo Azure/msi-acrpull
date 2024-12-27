@@ -17,7 +17,30 @@ spec:
     singular: acrpullbinding
   scope: Namespaced
   versions:
-  - name: v1beta2
+  - additionalPrinterColumns:
+    - description: FQDN for the ACR.
+      jsonPath: .spec.acr.server
+      name: Server
+      type: string
+    - description: Scope for the ACR token.
+      jsonPath: .spec.acr.scope
+      name: Scope
+      priority: 1
+      type: string
+    - description: Time the token was last refreshed.
+      jsonPath: .status.lastTokenRefreshTime
+      name: Last Refresh
+      priority: 1
+      type: date
+    - description: Time the current token expires.
+      jsonPath: .status.tokenExpirationTime
+      name: Expiration
+      type: date
+    - description: Errors encountered during token generation, if any.
+      jsonPath: .status.error
+      name: Error
+      type: string
+    name: v1beta2
     schema:
       openAPIV3Schema:
         description: AcrPullBinding is the Schema for the acrpullbindings API
