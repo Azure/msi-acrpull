@@ -33,7 +33,7 @@ resource subOwnerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04
 // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#role-based-access-control-administrator
 // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#privileged
 var rbacAdministratorId = 'f58310d9-a9f6-439a-9e8d-f62e7b41a168'
-resource credentialRefersherRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource rbacAdministratorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     name: guid('acr-puller-assigner', rbacAdministratorId)
     scope: subscription()
     properties: {
