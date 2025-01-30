@@ -1,109 +1,158 @@
+# ACR Pull
 
-# MSI ACR Pull
-MSI ACR Pull enables deployments in a Kubernetes cluster to use any user assigned managed identity to pull images from Azure Container Registry. With this, each application can use its own identity to pull container images.
+The `acrpull` controller enables deployments in an AKS cluster to use any user assigned managed identity to pull images
+from Azure Container Registry either by accessing credentials assigned to the VMSS of the AKS worker nodes, or by
+leveraging federated workload credentials. With this, each application can use its own identity to pull container
+images.
 
 # Install
-Run following command to install latest build from main branch. It will install the needed custom resource definition `ACRPullBinding` and deploy msi-acrpull controllers in `msi-acrpull-system` namespace.
 
-```bash
-kubectl apply -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/crd.yaml -f https://raw.githubusercontent.com/Azure/msi-acrpull/main/deploy/latest/deploy.yaml
+We provide a Helm chart for installation at `config/helm`. We have not yet published this to any registry, and we are
+not attempting to handle every possible configuration case with the chart. Please try the chart and give any feedback.
+
+With the repository cloned down, install with:
+
+```shell
+helm install ./config/helm
 ```
+
+This will install the custom resource definitions as well as the controllers, in whichever namespace you prefer. A new
+version of Kubernetes (1.30+) is required, as we utilize `ValidatingAdmissionPolicies`.
 
 # How to use
-> NOTE: following steps assumes you already have:
-> 1) An Kubernetes cluster, and have user assigned managed identities on node pool VMSS.
-> 1) An ACR, and the user assigned identity has [AcrPull](https://docs.microsoft.com/en-us/azure/container-registry/container-registry-roles#pull-image) role assigned on ACR.
 
-Once msi-acrpull is installed to your cluster, all you need is to deploy a custom resource `AcrPullBinding` to the application namesapce to bind an user assigned identity to an ACR. Following sample specifies all pods using default service account in the namespace to use user managed identity `my-acr-puller` to pull image from `veryimportantcr.azurecr.io`.
+Using `acrpullbindings.acrpull.microsoft.com/v1beta2`, a `.dockercfg` `Secret` may be created and assigned as a pull
+secret to a `ServiceAccount` of your choosing. The `acrpull` controller can use user-assigned managed identity credentials
+either if they are assigned to the VMSS on which the `acrpull` controller is running, or, preferably, through workload
+identity federation to service accounts in the namespace. New deployments of `acrpull` should use the latter approach;
+the former remains as a back-stop for users who have not yet migrated.
+
+## Federated Workload Identities
+
+Once an AKS cluster is deployed, create some identity with permissions to interact with an ACR instance:
+
+```bicep
+resource registry 'Microsoft.ContainerRegistry/registries@2023-01-01-preview' = {
+  name: uniqueString(uniqueIdentifier, 'acr')
+  location: location
+  sku: {
+    name: 'Basic'
+  }
+}
+
+resource pullerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: guid(uniqueIdentifier, registry.id, 'puller')
+  location: location
+}
+
+// ACR Image Puller Role:
+// https://learn.microsoft.com/en-us/azure/container-registry/container-registry-roles?tabs=azure-cli#pull-image
+// https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
+var acrImagePullerId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(uniqueIdentifier, resourceGroup().id, pullerIdentity.id, acrImagePullerId)
+  scope: registry
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', acrImagePullerId)
+    principalType: 'ServicePrincipal'
+    principalId: pullerIdentity.properties.principalId
+  }
+}
+```
+
+Then, federate it with the AKS cluster, choosing an audience - this *must* match the audience provided to the controller
+with `--service-account-token-audience`. The Helm chart does not (yet) expose this, the default value is `api://AzureCRTokenExchange`.
+This value is intentionally chosen to be unique, as we can then restrict our controller's ability to mint tokens, scoping
+behavior for this audience only and increasing security. The federated identity credential might look like this, with
+appropriate values for the service account's namespace and name:
+
+```bicep
+resource federatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
+  name: guid(aks.id, pullerIdentity.id)
+  parent: pullerIdentity
+  properties: {
+    audiences: [
+      'api://AzureCRTokenExchange'
+    ]
+    issuer: aks.properties.oidcIssuerProfile.issuerURL
+    subject: 'system:serviceaccount:NAMESPACE:SERVICE-ACCOUNT-NAME'
+  }
+}
+```
+
+Finally, create the `ACRPullBinding` to project the managed identity's credentials into a service account's pull secrets:
 
 ```yaml
-apiVersion: msi-acrpull.microsoft.com/v1beta1
+apiVersion: acrpull.microsoft.com/v1beta2
 kind: AcrPullBinding
 metadata:
-  name: acrpulltest
+  name: pull-binding
+  namespace: application
 spec:
-  acrServer: veryimportantcr.azurecr.io
-  managedIdentityResourceID: /subscriptions/712288dc-f816-4242-b73f-a0a87265dcc8/resourceGroups/my-identities/providers/Microsoft.ManagedIdentity/userAssignedIdentities/my-acr-puller
+  acr:
+    environment: PublicCloud
+    scope: repository:<repository-name>:pull
+    server: <acr-host>.azurecr.io
+  auth:
+    workloadIdentity:
+      serviceAccountRef: <sa-name-with-fic>
+  serviceAccountName: <sa-name-to-project-into>
 ```
 
-Once the custom resource deployed, you can deploy your application to pull images from the ACR. No changes to the application deployment yaml is needed. 
+## Managed Service Identities
 
-> If the application pod uses a custom service account, then specify `serviceAccountName` property in AcrPullBinding spec.
-## Default Values
-If you use the same MSI and ACR endpoint for all your container, you can provide a default value to the controller.
-To do so, set the environment variables on the `msi-acrpull-controller-manager` container :
+> NOTE: the following steps are not recommended, but remain here for posterity. Prefer to use federated workload identity.
 
-3 default values can be set : 
-- ACR_SERVER
-- MANAGED_IDENTITY_RESOURCE_ID
-- MANAGED_IDENTITY_CLIENT_ID
+Once an AKS cluster is stood up, a user-assigned managed identity may be bound to the VMSS for the worker nodes using
+some imperative logic and the `az` CLI. Refer to the end-to-end test's `Makefile` target for `_output/system-vmss-puller.json`
+as an example.
 
-
-These environment variables are used if the `ACRPullBinding` crd does not set them.
-Deployment spec example: 
+Create an `ACRPullBinding` to project this credential:
 
 ```yaml
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: acrpull.microsoft.com/v1beta2
+kind: AcrPullBinding
 metadata:
-  labels:
-    control-plane: controller-manager
-  name: msi-acrpull-controller-manager
-  namespace: msi-acrpull-system
+  name: pull-binding
+  namespace: application
 spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      control-plane: controller-manager
-  template:
-    metadata:
-      labels:
-        control-plane: controller-manager
-    spec:
-      containers:
-      - args:
-        - --metrics-addr=127.0.0.1:8080
-        - --enable-leader-election
-        env:
-        - name: "ACR_SERVER"
-          value: "myacr.azurecr.io"
-        - name: "MANAGED_IDENTITY_RESOURCE_ID"
-          value: "<you managed identity resource id>"
-        command:
-        - /manager
-        image: mcr.microsoft.com/aks/msi-acrpull:v0.1.0-alpha
-        name: manager
-        resources:
-          limits:
-            cpu: 100m
-            memory: 100Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
-      - args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://127.0.0.1:8080/
-        - --logtostderr=true
-        - --v=10
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.5.0
-        name: kube-rbac-proxy
-        ports:
-        - containerPort: 8443
-          name: https
-      terminationGracePeriodSeconds: 10
+  acr:
+    environment: PublicCloud
+    scope: repository:<repository-name>:pull
+    server: <acr-host>.azurecr.io
+  auth:
+    managedIdentity:
+      resourceID: /subscriptions/<uuid>/resourceGroups/<rg>/providers/Microsoft.ManagedIdentity/userAssignedIdentities/<id>
+  serviceAccountName: <sa-name-to-project-into>
 ```
 
+## Migrating From v1beta1 to v1beta2
 
-# How it works
-The architecture looks like below. As an user you will create a custom resource `ACRPullBinding`, which binds a managed identity (using client ID or resource ID) to an Azure container registry (using its FQDN). 
+Users of the previous `v1beta1` API are strongly recommended to migrate to `v1beta2`. This release brings two breaking
+changes:
 
-Internally, the `ACRPullBindingController` watches the `ACRPullBinding` resource, and for each of them, create a secret in the namespace. The secret content is a Docker image pull config, and the password is the ACR access token that the controller exchanged from ACR using managed identity. The secret will be refreshed 30min before it expire automatically. The controller will also associate the secret to the specified service account in namespace (by default, use the default service account). With this, any pods created in the namespace will automatically pull images from the ACR using the specified managed identity credential.
+1. a new Helm chart to facilitate deployment of the controller, CRDs, and VAP
+2. ACR scopes are now required in pull bindings
 
-![Diagram](https://github.com/Azure/msi-acrpull/blob/main/docs/msi-acrpull-flow.png)
+We recommend the following steps to migrate:
+
+1. Ensure at least v0.1.4 is running, if not, upgrade to this version and ensure it has processed every `ACRPullbinding`.
+1. Deploy the CRDs from the current `acrpull` repository.
+1. Fully remove the previous installation if `msi-acrpull` and deploy the new `acrpull` controller. This may mean that
+   the `ACRPullBinding` API is unresponsive for a short period of time, but existing pull secrets will continue to function
+   so no outage will occur.
+1. Deploy the new `acrpull` controller and VAP.
+1. Upgrade `ACRPullBinding` objects from `v1beta1` to `v1beta2` at your own pace.
+
+### A note on scopes
+
+The container registry spec does not allow for blanket "pull everything in this registry" permissions in a scope, so a
+scope must be provided for every registry that an `ACRPullBinding` is configured for. Scopes may be chained as a space-
+delimited list.
 
 # Contributing
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 
