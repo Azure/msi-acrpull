@@ -122,9 +122,9 @@ spec:
     - name: removedPullSecrets
       expression: "variables.previousPullSecretNames.filter(s, !(s in variables.pullSecretNames))"
     - name: onlyCorrectPullSecretsAdded
-      expression: "variables.addedPullSecrets.all(s, s.matches('^acr-pull-.{1,44}-[a-zA-Z0-9]{10}$') || s.matches('-msi-acrpull-secret$'))"
+      expression: "variables.addedPullSecrets.all(s, s.matches('^acr-pull-.{1,44}-[a-zA-Z0-9]{10}$'))"
     - name: onlyCorrectPullSecretsRemoved
-      expression: "variables.removedPullSecrets.all(s, s.matches('^acr-pull-.{1,44}-[a-zA-Z0-9]{10}$') || s.matches('-msi-acrpull-secret$'))"
+      expression: "variables.removedPullSecrets.all(s, s.matches('^acr-pull-.{1,44}-[a-zA-Z0-9]{10}$'))"
   validations:
     - expression: "variables.secretsUnchanged == true && variables.automountUnchanged == true && variables.onlyCorrectPullSecretsAdded == true && variables.onlyCorrectPullSecretsRemoved == true"
       messageExpression: "string(params.data.controllerServiceAccountName) + ' has failed to ' + string(request.operation) + ' service account ' + string(request.name) + ' in the ' + string(request.namespace) + ' namespace. The controller may only update service accounts to add or remove pull secrets that the controller manages.' + string(variables.automountUnchanged == true) + string(variables.automountUnchanged == true) + string(variables.onlyCorrectPullSecretsAdded == true) + string(variables.onlyCorrectPullSecretsRemoved == true)"

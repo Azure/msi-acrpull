@@ -254,10 +254,6 @@ func pullSecretName(acrBindingName string) string {
 	return pullSecretNamePrefix + suffix + "-" + base36sha224([]byte(acrBindingName))[:10]
 }
 
-func legacySecretName(acrBindingName string) string {
-	return fmt.Sprintf("%s-msi-acrpull-secret", acrBindingName)
-}
-
 func newPullSecret(acrBinding client.Object,
 	dockerConfig string, scheme *runtime.Scheme, expiry time.Time, now func() time.Time, inputHash string) *corev1.Secret {
 

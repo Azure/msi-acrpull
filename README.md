@@ -144,6 +144,14 @@ We recommend the following steps to migrate:
 1. Deploy the new `acrpull` controller and VAP.
 1. Upgrade `ACRPullBinding` objects from `v1beta1` to `v1beta2` at your own pace.
 
+### A note on upgrades
+
+If v0.1.5 is installed before v0.1.4 has had time to run to completion, the validating admission policies will not allow
+legacy credentials to be cleaned up. Please upgrade to v0.1.8 to unblock this flow, then follow steps starting from 2 above.
+
+It is **NOT SUPPORTED** to upgrade from v0.1.3 to v0.1.9 or higher. This will break the existing pull bindings on the cluster.
+Ensure that v0.1.4 or v0.1.8 are installed in between v0.1.3 and anything v0.1.9 or higher for a successful upgrade.
+
 ### A note on scopes
 
 The container registry spec does not allow for blanket "pull everything in this registry" permissions in a scope, so a
