@@ -17,7 +17,6 @@ linters:
   enable:
     - dupl
     - errcheck
-    - exportloopref
     - gofmt
     - goimports
     - gosimple

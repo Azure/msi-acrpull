@@ -15,7 +15,38 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+const (
+	serviceAccountField   = ".spec.serviceAccountName"
+	imagePullSecretsField = ".imagePullSecrets"
+)
+
+func indexPullBindingByServiceAccount(object crclient.Object) []string {
+	acrPullBinding, ok := object.(*msiacrpullv1beta1.AcrPullBinding)
+	if !ok {
+		return nil
+	}
+
+	return []string{getServiceAccountName(acrPullBinding.Spec.ServiceAccountName)}
+}
+
+func enqueuePullBindingsForServiceAccount(mgr ctrl.Manager) func(ctx context.Context, object crclient.Object) []reconcile.Request {
+	return func(ctx context.Context, object crclient.Object) []reconcile.Request {
+		var pullBindings msiacrpullv1beta1.AcrPullBindingList
+		if err := mgr.GetClient().List(ctx, &pullBindings, crclient.InNamespace(object.GetNamespace()), crclient.MatchingFields{serviceAccountField: object.GetName()}); err != nil {
+			return nil
+		}
+		var requests []reconcile.Request
+		for _, pullBinding := range pullBindings.Items {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: crclient.ObjectKeyFromObject(&pullBinding),
+			})
+		}
+		return requests
+	}
+}
 
 // genericReconciler reconciles AcrPullBindings
 type genericReconciler[O pullBinding] struct {

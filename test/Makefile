@@ -61,19 +61,6 @@ _output/image.json: _output/infrastructure.json
 _output/image: _output/image.json
 	echo "$(shell jq --raw-output '.properties.outputs.acr.value.serviceRegistryName.value' < _output/infrastructure.json ).azurecr.io/msi-acrpull@$(shell jq --raw-output '.digest' _output/image.json )" > _output/image
 
-# this is a nasty hack, ideally we'd have some centrally-available ACR to pull old images from
-PREVIOUS_TAG=$(shell git describe --tags --abbrev=0)
-_output/previous-repo:
-	git clone https://github.com/Azure/msi-acrpull.git _output/previous-repo
-	cd _output/previous-repo && git checkout "$(PREVIOUS_TAG)"
-
-_output/previous-image.json: _output/infrastructure.json _output/previous-repo
-	az acr build --registry "$(shell jq --raw-output '.properties.outputs.acr.value.serviceRegistryName.value' < _output/infrastructure.json )" --image "msi-acrpull:$(PREVIOUS_TAG)" _output/previous-repo
-	az acr repository show --name "$(shell jq --raw-output '.properties.outputs.acr.value.serviceRegistryName.value' < _output/infrastructure.json )" --image "msi-acrpull:$(PREVIOUS_TAG)" --output json > _output/previous-image.json
-
-_output/previous-image: _output/previous-image.json
-	echo "$(shell jq --raw-output '.properties.outputs.acr.value.serviceRegistryName.value' < _output/infrastructure.json ).azurecr.io/msi-acrpull@$(shell jq --raw-output '.digest' _output/previous-image.json )" > _output/previous-image
-
 prometheus-crds: _output/assets/0alertmanagerConfigCustomResourceDefinition.yaml _output/assets/0prometheusCustomResourceDefinition.yaml _output/assets/0servicemonitorCustomResourceDefinition.yaml _output/assets/0alertmanagerCustomResourceDefinition.yaml _output/assets/0prometheusagentCustomResourceDefinition.yaml _output/assets/0thanosrulerCustomResourceDefinition.yaml _output/assets/0podmonitorCustomResourceDefinition.yaml _output/assets/0prometheusruleCustomResourceDefinition.yaml _output/assets/namespace.yaml _output/assets/0probeCustomResourceDefinition.yaml _output/assets/0scrapeconfigCustomResourceDefinition.yaml
 
 _output/assets/0alertmanagerConfigCustomResourceDefinition.yaml _output/assets/0prometheusCustomResourceDefinition.yaml _output/assets/0servicemonitorCustomResourceDefinition.yaml _output/assets/0alertmanagerCustomResourceDefinition.yaml _output/assets/0prometheusagentCustomResourceDefinition.yaml _output/assets/0thanosrulerCustomResourceDefinition.yaml _output/assets/0podmonitorCustomResourceDefinition.yaml _output/assets/0prometheusruleCustomResourceDefinition.yaml _output/assets/namespace.yaml _output/assets/0probeCustomResourceDefinition.yaml _output/assets/0scrapeconfigCustomResourceDefinition.yaml:
@@ -91,12 +78,11 @@ _output/config:
 	rm -rf _output/config
 	cp -r ./../config _output/config
 
-_output/deploy/new-image: _output/deploy/previous _output/deploy/image
+_output/deploy/new-image: _output/deploy/image
 	touch $@
 
 _output/deploy/image: _output/image
-_output/deploy/previous-image: _output/previous-image
-_output/deploy/image _output/deploy/previous-image: _output/aks.kubeconfig $(HELM) _output/deploy/prometheus-crds _output/system-vmss-puller.json
+_output/deploy/image: _output/aks.kubeconfig $(HELM) _output/deploy/prometheus-crds _output/system-vmss-puller.json
 	cp values.template.yaml _output/values.yaml
 	sed -i -e 's|IMAGE_DIGEST|$(shell cat _output/$(notdir $@) )|' _output/values.yaml
 	$(HELM) template --kubeconfig _output/aks.kubeconfig acrpull ./../config/helm --values _output/values.yaml --create-namespace --dry-run=server > _output/chart.yaml
@@ -114,13 +100,6 @@ deploy:
 	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.msi-acrpull.microsoft.com
 	kubectl --kubeconfig _output/aks.kubeconfig wait --for condition=Established crd/acrpullbindings.acrpull.microsoft.com
 	kubectl --kubeconfig _output/aks.kubeconfig --namespace acrpull wait --for condition=Available deployment/acrpull --timeout 120s
-
-_output/deploy/previous: _output/deploy/previous-image _output/system-vmss-puller.json
-	cp pullbinding.template.yaml _output/pullbinding.yaml
-	sed -i -e 's|MANAGED_IDENTITY_RESOURCE_ID|$(shell jq --raw-output '.properties.outputs.acr.value.pullerIdentity.value' < _output/infrastructure.json )|g' -e 's|ACR_SERVER|$(shell jq --raw-output '.properties.outputs.acr.value.registryName.value' < _output/infrastructure.json).azurecr.io|g' _output/pullbinding.yaml
-	kubectl --kubeconfig _output/aks.kubeconfig apply --server-side -f _output/pullbinding.yaml
-	kubectl --kubeconfig _output/aks.kubeconfig wait --for 'jsonpath={.imagePullSecrets[0]}' --namespace default serviceaccount/default
-	touch $@
 
 .PHONY: test
 test: _output/deploy/new-image _output/alice _output/bob _output/tenant
