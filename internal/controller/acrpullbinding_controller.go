@@ -83,8 +83,8 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				return serviceAccountName
 			},
 			GetInputsHash: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
-				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec) // TODO: add scope to hash, test changing scope
-				return base36sha224([]byte(msiClientID + msiResourceID + acrServer))
+				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
+				return base36sha224([]byte(msiClientID + msiResourceID + acrServer + binding.Spec.Scope))
 			},
 			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
