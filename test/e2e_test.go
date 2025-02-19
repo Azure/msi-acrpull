@@ -194,6 +194,8 @@ func testACRPullBinding[B binding](
 			}
 		})
 
+		eventuallyServiceAccountExists(t, ctx, client, namespace, "default")
+
 		const pod = "fail"
 		t.Logf("creating pod %s/%s", namespace, pod)
 		if err := client.Create(ctx, &corev1.Pod{
@@ -540,6 +542,8 @@ func validateScopedPods(ctx context.Context, t *testing.T, cfg *Config, namespac
 		})
 	}
 
+	eventuallyServiceAccountExists(t, ctx, client, namespace, "default")
+
 	const pod = "fail"
 	t.Logf("creating pod without service account %s/%s", namespace, pod)
 	if err := client.Create(ctx, &corev1.Pod{
@@ -647,6 +651,28 @@ func eventuallyFailToPullImage(t *testing.T, ctx context.Context, client crclien
 				State:  ContainerStateWaiting,
 				Reason: "ImagePullBackOff",
 			}),
+		},
+		WithTimeout(2*time.Minute),
+	)
+}
+
+func eventuallyServiceAccountExists(t *testing.T, ctx context.Context, client crclient.Client, namespace, name string) {
+	EventuallyObject(t, ctx, fmt.Sprintf("ServiceAccount %s/%s to exist", namespace, name),
+		func(ctx context.Context) (*corev1.ServiceAccount, error) {
+			thisServiceAccount := corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
+			err := client.Get(ctx, crclient.ObjectKeyFromObject(&thisServiceAccount), &thisServiceAccount)
+			if errors.IsNotFound(err) {
+				return nil, nil
+			}
+			return &thisServiceAccount, err
+		},
+		[]Predicate[*corev1.ServiceAccount]{
+			func(serviceAccount *corev1.ServiceAccount) (done bool, reasons string, err error) {
+				if serviceAccount == nil {
+					return false, "service account not found", nil
+				}
+				return true, fmt.Sprintf("service account %s/%s exists", serviceAccount.Namespace, serviceAccount.Name), nil
+			},
 		},
 		WithTimeout(2*time.Minute),
 	)
