@@ -83,8 +83,8 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				return serviceAccountName
 			},
 			GetInputsHash: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
-				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec) // TODO: add scope to hash, test changing scope
-				return base36sha224([]byte(msiClientID + msiResourceID + acrServer))
+				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
+				return base36sha224([]byte(msiClientID + msiResourceID + acrServer + binding.Spec.Scope))
 			},
 			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
@@ -118,13 +118,14 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				}
 			},
 			NeedsStatusUpdate: func(refresh time.Time, expiry time.Time, binding *msiacrpullv1beta1.AcrPullBinding) bool {
-				return binding.Status.TokenExpirationTime == nil || !binding.Status.TokenExpirationTime.Equal(&metav1.Time{Time: expiry}) ||
+				return binding.Status.Error != "" || binding.Status.TokenExpirationTime == nil || !binding.Status.TokenExpirationTime.Equal(&metav1.Time{Time: expiry}) ||
 					binding.Status.LastTokenRefreshTime == nil || !binding.Status.LastTokenRefreshTime.Equal(&metav1.Time{Time: refresh})
 			},
 			UpdateStatus: func(refresh time.Time, expiry time.Time, binding *msiacrpullv1beta1.AcrPullBinding) *msiacrpullv1beta1.AcrPullBinding {
 				updated := binding.DeepCopy()
 				updated.Status.TokenExpirationTime = &metav1.Time{Time: expiry}
 				updated.Status.LastTokenRefreshTime = &metav1.Time{Time: refresh}
+				updated.Status.Error = ""
 				return updated
 			},
 			now: opts.now,

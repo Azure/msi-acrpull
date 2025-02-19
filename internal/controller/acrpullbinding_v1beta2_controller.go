@@ -158,13 +158,14 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 				}
 			},
 			NeedsStatusUpdate: func(refresh time.Time, expiry time.Time, binding *msiacrpullv1beta2.AcrPullBinding) bool {
-				return binding.Status.TokenExpirationTime == nil || !binding.Status.TokenExpirationTime.Equal(&metav1.Time{Time: expiry}) ||
+				return binding.Status.Error != "" || binding.Status.TokenExpirationTime == nil || !binding.Status.TokenExpirationTime.Equal(&metav1.Time{Time: expiry}) ||
 					binding.Status.LastTokenRefreshTime == nil || !binding.Status.LastTokenRefreshTime.Equal(&metav1.Time{Time: refresh})
 			},
 			UpdateStatus: func(refresh time.Time, expiry time.Time, binding *msiacrpullv1beta2.AcrPullBinding) *msiacrpullv1beta2.AcrPullBinding {
 				updated := binding.DeepCopy()
 				updated.Status.TokenExpirationTime = &metav1.Time{Time: expiry}
 				updated.Status.LastTokenRefreshTime = &metav1.Time{Time: refresh}
+				updated.Status.Error = ""
 				return updated
 			},
 			now: opts.now,
