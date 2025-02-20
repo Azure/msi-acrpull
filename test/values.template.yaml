@@ -1,4 +1,5 @@
 image: IMAGE_DIGEST
+ttlRotationFraction: 0.01
 affinity:
   nodeAffinity:
     requiredDuringSchedulingIgnoredDuringExecution:
