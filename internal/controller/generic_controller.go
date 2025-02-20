@@ -126,7 +126,7 @@ func (r *genericReconciler[O]) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	action := r.reconcile(ctx, logger, acrBinding, serviceAccount, pullSecret, referencingServiceAccounts.Items)
 
-	return action.execute(ctx, r.Client, r.RequeueAfter(r.now))
+	return action.execute(ctx, logger, r.Client, r.RequeueAfter(r.now))
 }
 
 func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger, acrBinding O, serviceAccount *corev1.ServiceAccount, pullSecret *corev1.Secret, referencingServiceAccounts []corev1.ServiceAccount) *action[O] {
@@ -268,18 +268,25 @@ func (r *genericReconciler[O]) setSuccessStatus(log logr.Logger, acrBinding O, p
 		log.Info("updating pull binding to reflect expiry and refresh time from secret")
 		return &action[O]{updatePullBindingStatus: r.UpdateStatus(refresh, expiry, acrBinding)}
 	}
-	return nil
+	// there's nothing for us to do, but we must make sure that we re-queue for a refresh
+	return &action[O]{noop: acrBinding}
 }
 
-func (a *action[O]) execute(ctx context.Context, client crclient.Client, refresh func(O) time.Duration) (ctrl.Result, error) {
+func (a *action[O]) execute(ctx context.Context, logger logr.Logger, client crclient.Client, refresh func(O) time.Duration) (ctrl.Result, error) {
 	if a == nil {
 		return ctrl.Result{}, nil
 	}
 	a.validate()
 	if a.updatePullBinding != nil {
 		return ctrl.Result{}, client.Update(ctx, a.updatePullBinding)
+	} else if a.noop != nil {
+		after := clampRequeue(refresh(a.noop))
+		logger.WithValues("requeueAfter", after).Info("nothing to do, re-queueing for later processing")
+		return ctrl.Result{RequeueAfter: after}, nil
 	} else if a.updatePullBindingStatus != nil {
-		return ctrl.Result{RequeueAfter: refresh(a.updatePullBindingStatus)}, client.Status().Update(ctx, a.updatePullBindingStatus)
+		after := clampRequeue(refresh(a.updatePullBindingStatus))
+		logger.WithValues("requeueAfter", after).Info("re-queueing for later processing")
+		return ctrl.Result{RequeueAfter: after}, client.Status().Update(ctx, a.updatePullBindingStatus)
 	} else if a.createSecret != nil {
 		return ctrl.Result{}, client.Create(ctx, a.createSecret)
 	} else if a.updateSecret != nil {
@@ -289,7 +296,23 @@ func (a *action[O]) execute(ctx context.Context, client crclient.Client, refresh
 	} else if a.updateServiceAccount != nil {
 		return ctrl.Result{}, client.Update(ctx, a.updateServiceAccount)
 	}
+	logger.Info("no action taken")
 	return ctrl.Result{}, nil
+}
+
+// clampRequeue ensures that the requeue duration is greater than zero. Since we poll time.Now() more than once during
+// reconciliation, it may be possible to have the following sets of events:
+// t_refresh is when the credential should be refreshed based on our calculations
+// 1. t_now = t_refresh - 1 : r.NeedsRefresh() determines nothing needs to be done
+// 2. t_now = t_refresh + 1 : r.RequeueAfter() determines that requeue should have happened 1 unit in the past
+//
+// In such a case, ctrl.Result{} with RequeueAfter < 0 would not cause a requeue, and we would hang until the next
+// re-list for the controller.
+func clampRequeue(requeue time.Duration) time.Duration {
+	if requeue < 0 {
+		return time.Second
+	}
+	return requeue
 }
 
 type pullBinding interface {
@@ -300,6 +323,7 @@ type pullBinding interface {
 // action captures the outcome of a reconciliation pass using static data, to aid in testing the reconciliation loop
 type action[O pullBinding] struct {
 	updatePullBinding       O
+	noop                    O
 	updatePullBindingStatus O
 
 	createSecret *corev1.Secret
@@ -312,6 +336,9 @@ type action[O pullBinding] struct {
 func (a *action[O]) validate() {
 	var present int
 	if a.updatePullBinding != nil {
+		present++
+	}
+	if a.noop != nil {
 		present++
 	}
 	if a.updatePullBindingStatus != nil {

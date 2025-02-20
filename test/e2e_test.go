@@ -656,19 +656,21 @@ func eventuallyFailToPullImage(t *testing.T, ctx context.Context, client crclien
 	)
 }
 
+const fakeSentinel = "missing"
+
 func eventuallyServiceAccountExists(t *testing.T, ctx context.Context, client crclient.Client, namespace, name string) {
 	EventuallyObject(t, ctx, fmt.Sprintf("ServiceAccount %s/%s to exist", namespace, name),
 		func(ctx context.Context) (*corev1.ServiceAccount, error) {
 			thisServiceAccount := corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
 			err := client.Get(ctx, crclient.ObjectKeyFromObject(&thisServiceAccount), &thisServiceAccount)
 			if errors.IsNotFound(err) {
-				return nil, nil
+				return &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: fakeSentinel}}, nil
 			}
 			return &thisServiceAccount, err
 		},
 		[]Predicate[*corev1.ServiceAccount]{
 			func(serviceAccount *corev1.ServiceAccount) (done bool, reasons string, err error) {
-				if serviceAccount == nil {
+				if serviceAccount.Name == fakeSentinel {
 					return false, "service account not found", nil
 				}
 				return true, fmt.Sprintf("service account %s/%s exists", serviceAccount.Namespace, serviceAccount.Name), nil
