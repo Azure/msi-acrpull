@@ -89,21 +89,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupLog.Info(fmt.Sprintf("filtering Secret informers for label %s", controller.ACRPullBindingLabel))
-	requirement, err := labels.NewRequirement(controller.ACRPullBindingLabel, selection.Exists, []string{})
-	if err != nil {
-		setupLog.Error(err, "unable to create label selector")
-		os.Exit(1)
-	}
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: scheme,
-		Cache: cache.Options{
+	cleanupRequired := controller.LegacyPullSecretsPresent(pullBindings, secrets)
+
+	// when we've already cleaned up all legacy secrets, we can filter our
+	// informers to only the set of secrets we create and manage
+	var cacheOpts cache.Options
+	if !cleanupRequired {
+		setupLog.Info(fmt.Sprintf("filtering Secret informers for label %s", controller.ACRPullBindingLabel))
+		requirement, err := labels.NewRequirement(controller.ACRPullBindingLabel, selection.Exists, []string{})
+		if err != nil {
+			setupLog.Error(err, "unable to create label selector")
+			os.Exit(1)
+		}
+		cacheOpts = cache.Options{
 			ByObject: map[crclient.Object]cache.ByObject{
 				&corev1.Secret{}: {
 					Label: labels.NewSelector().Add(*requirement),
 				},
 			},
-		},
+		}
+	}
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme:                 scheme,
+		Cache:                  cacheOpts,
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
@@ -147,6 +156,18 @@ func main() {
 	if err := v1beta2Reconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBindingV1beta2")
 		os.Exit(1)
+	}
+
+	if cleanupRequired {
+		setupLog.Info("setting up controller to clean up legacy pull tokens")
+		cleanupController := &controller.LegacyTokenCleanupController{
+			Client: mgr.GetClient(),
+			Log:    ctrl.Log.WithName("controllers").WithName("LegacyTokenCleanup"),
+		}
+		if err := cleanupController.SetupWithManager(ctx, mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "LegacyTokenCleanup")
+			os.Exit(1)
+		}
 	}
 	//+kubebuilder:scaffold:builder
 
