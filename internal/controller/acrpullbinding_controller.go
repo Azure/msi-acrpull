@@ -16,9 +16,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -81,6 +83,9 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 					serviceAccountName = defaultServiceAccountName
 				}
 				return serviceAccountName
+			},
+			GetPullSecretName: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
+				return legacySecretName(binding.ObjectMeta.Name)
 			},
 			GetInputsHash: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
@@ -199,6 +204,9 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &msiacrpullv1beta1.AcrPullBinding{}, serviceAccountField, indexPullBindingByServiceAccount); err != nil {
 		return err
 	}
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Secret{}, pullBindingField, indexPullSecretByPullBinding); err != nil {
+		return err
+	}
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ServiceAccount{}, imagePullSecretsField, func(object client.Object) []string {
 		serviceAccount, ok := object.(*corev1.ServiceAccount)
 		if !ok {
@@ -220,9 +228,44 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&msiacrpullv1beta1.AcrPullBinding{}).
 		Named("acr-pull-binding").
-		Owns(&corev1.Secret{}).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForPullSecret(mgr))).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).
 		Complete(r)
+}
+
+func indexPullSecretByPullBinding(object client.Object) []string {
+	pullSecret, ok := object.(*corev1.Secret)
+	if !ok {
+		return nil
+	}
+
+	if pullBindingName, labelled := pullSecret.Labels[ACRPullBindingLabel]; labelled {
+		return []string{pullBindingName}
+	}
+
+	// while we clean up legacy secrets and add labels to them, we need to handle un-labelled secrets here
+	if isLegacySecretName(pullSecret.ObjectMeta.Name) {
+		return []string{pullBindingNameFromLegacySecret(pullSecret.ObjectMeta.Name)}
+	}
+
+	return nil
+}
+
+func enqueuePullBindingsForPullSecret(_ ctrl.Manager) func(ctx context.Context, object client.Object) []reconcile.Request {
+	return func(ctx context.Context, object client.Object) []reconcile.Request {
+		pullSecret, ok := object.(*corev1.Secret)
+		if !ok {
+			return nil
+		}
+
+		var pullBindingName string
+		if name, labelled := pullSecret.Labels[ACRPullBindingLabel]; labelled {
+			pullBindingName = name
+		} else if isLegacySecretName(pullSecret.ObjectMeta.Name) {
+			pullBindingName = pullBindingNameFromLegacySecret(pullSecret.ObjectMeta.Name)
+		}
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: pullSecret.Namespace, Name: pullBindingName}}}
+	}
 }
 
 func getServiceAccountName(userSpecifiedName string) string {
@@ -291,7 +334,7 @@ func newPullSecret(acrBinding client.Object,
 				tokenRefreshAnnotation: now().Format(time.RFC3339),
 				tokenInputsAnnotation:  inputHash,
 			},
-			Name:      pullSecretName(acrBinding.GetName()),
+			Name:      name,
 			Namespace: acrBinding.GetNamespace(),
 		},
 		Data: map[string][]byte{
