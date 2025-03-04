@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
+	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
@@ -453,9 +455,30 @@ func Conditions(item client.Object) ([]Condition, error) {
 			}
 		}
 		return conditions, nil
+	case *msiacrpullv1beta1.AcrPullBinding:
+		return conditionFor(obj.Status.Error), nil
+	case *msiacrpullv1beta2.AcrPullBinding:
+		return conditionFor(obj.Status.Error), nil
 	default:
 		return nil, fmt.Errorf("object %T unknown", item)
 	}
+}
+
+func conditionFor(err string) []Condition {
+	if err != "" {
+		return []Condition{{
+			Type:    "CredentialsMinted",
+			Status:  metav1.ConditionFalse,
+			Reason:  "ErrMintingCredentials",
+			Message: err,
+		}}
+	}
+	return []Condition{{
+		Type:    "CredentialsMinted",
+		Status:  metav1.ConditionTrue,
+		Reason:  "AsExpected",
+		Message: "Credentials minted without error.",
+	}}
 }
 
 func (needle Condition) Matches(condition Condition) bool {
