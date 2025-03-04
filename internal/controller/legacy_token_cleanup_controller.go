@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -13,13 +14,13 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 )
 
 const (
+	pullBindingField      = ".pullBinding"
 	serviceAccountField   = ".spec.serviceAccountName"
 	imagePullSecretsField = ".imagePullSecrets"
 )
@@ -58,8 +59,6 @@ func (c *LegacyTokenCleanupController) SetupWithManager(_ context.Context, mgr c
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("legacy-token-cleanup").
 		For(&msiacrpullv1beta1.AcrPullBinding{}).
-		// n.b. the other controller always runs and sets up the indexer, so we can just use it
-		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).
 		Complete(c)
 }
 
@@ -77,18 +76,6 @@ func (c *LegacyTokenCleanupController) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, nil
 	}
 
-	serviceAccountName := getServiceAccountName(acrBinding.Spec.ServiceAccountName)
-	serviceAccount := &corev1.ServiceAccount{}
-	if err := c.Client.Get(ctx, types.NamespacedName{
-		Namespace: req.Namespace,
-		Name:      serviceAccountName,
-	}, serviceAccount); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get service account")
-			return ctrl.Result{}, err
-		}
-	}
-
 	legacySecret := &corev1.Secret{}
 	if err := c.Client.Get(ctx, types.NamespacedName{
 		Namespace: req.Namespace,
@@ -101,43 +88,36 @@ func (c *LegacyTokenCleanupController) Reconcile(ctx context.Context, req ctrl.R
 			legacySecret = nil
 		}
 	}
-	action := c.reconcile(acrBinding, serviceAccount, legacySecret)
+	action := c.reconcile(acrBinding, legacySecret)
 
 	return c.execute(ctx, action)
 }
 
-func (c *LegacyTokenCleanupController) reconcile(acrBinding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount, legacySecret *corev1.Secret) *cleanupAction {
-	if !slices.ContainsFunc(serviceAccount.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-		return reference.Name == pullSecretName(acrBinding.ObjectMeta.Name)
-	}) {
-		// this service account doesn't have a non-legacy pull token generated yet, so we shouldn't remove anything
-		return nil
-	}
+func (c *LegacyTokenCleanupController) reconcile(acrBinding *msiacrpullv1beta1.AcrPullBinding, legacySecret *corev1.Secret) *cleanupAction {
+	if legacySecret != nil {
+		if _, labelled := legacySecret.Labels[ACRPullBindingLabel]; labelled {
+			// legacy secret already labelled, so there's nothing left to do for this pull binding. In this case, it is
+			// possible that every object that required cleanup is already gone; in which case we should exit the
+			// process, so the Pod that succeeds us can filter the informers used to drive the controller and stop
+			// having to track extraneous objects
+			c.Log.Info("checking to see if legacy token cleanup is complete")
+			return &cleanupAction{checkCompletion: true}
+		}
 
-	if slices.ContainsFunc(serviceAccount.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-		return reference.Name == legacySecretName(acrBinding.ObjectMeta.Name)
-	}) {
-		// this service account still refers to the legacy token, we need to clean that up
-		updated := serviceAccount.DeepCopy()
-		updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-			return reference.Name == legacySecretName(acrBinding.ObjectMeta.Name)
-		})
-		c.Log.WithValues("serviceAccountNamespace", updated.Namespace, "serviceAccountName", updated.Name).Info("removing reference to legacy pull token secret from service account")
-		return &cleanupAction{updateServiceAccount: updated}
+		updated := legacySecret.DeepCopy()
+		if updated.Labels == nil {
+			updated.Labels = map[string]string{}
+		}
+		updated.Labels[ACRPullBindingLabel] = acrBinding.GetName()
+		c.Log.WithValues("secretNamespace", updated.Namespace, "secretName", updated.Name).Info("adding label to pull secret")
+		return &cleanupAction{updateSecret: updated}
 	}
-
-	if legacySecret == nil {
-		// legacy secret already gone, so there's nothing left to do for this pull binding. In this case, it is
-		// possible that every object that required cleanup is already gone; in which case we should exit the
-		// process, so the Pod that succeeds us can filter the informers used to drive the controller and stop
-		// having to track extraneous objects
-		c.Log.Info("checking to see if legacy token cleanup is complete")
-		return &cleanupAction{checkCompletion: true}
-	}
-
-	// legacy secret still exists, let's clean it up
-	c.Log.WithValues("tokenNamespace", legacySecret.Namespace, "tokenName", legacySecret.Name).Info("cleaning up legacy pull token secret")
-	return &cleanupAction{deleteSecret: legacySecret}
+	// legacy secret gone, so there's nothing left to do for this pull binding. In this case, it is
+	// possible that every object that required cleanup is already gone; in which case we should exit the
+	// process, so the Pod that succeeds us can filter the informers used to drive the controller and stop
+	// having to track extraneous objects
+	c.Log.Info("checking to see if legacy token cleanup is complete")
+	return &cleanupAction{checkCompletion: true}
 }
 
 func (c *LegacyTokenCleanupController) execute(ctx context.Context, action *cleanupAction) (ctrl.Result, error) {
@@ -145,10 +125,8 @@ func (c *LegacyTokenCleanupController) execute(ctx context.Context, action *clea
 		return ctrl.Result{}, nil
 	}
 	action.validate()
-	if action.updateServiceAccount != nil {
-		return ctrl.Result{}, c.Client.Update(ctx, action.updateServiceAccount)
-	} else if action.deleteSecret != nil {
-		return ctrl.Result{}, c.Client.Delete(ctx, action.deleteSecret)
+	if action.updateSecret != nil {
+		return ctrl.Result{}, c.Client.Update(ctx, action.updateSecret)
 	} else if action.checkCompletion {
 		return ctrl.Result{}, c.checkCompletion(ctx)
 	}
@@ -156,17 +134,13 @@ func (c *LegacyTokenCleanupController) execute(ctx context.Context, action *clea
 }
 
 type cleanupAction struct {
-	updateServiceAccount *corev1.ServiceAccount
-	deleteSecret         *corev1.Secret
-	checkCompletion      bool
+	updateSecret    *corev1.Secret
+	checkCompletion bool
 }
 
 func (a *cleanupAction) validate() {
 	var present int
-	if a.updateServiceAccount != nil {
-		present++
-	}
-	if a.deleteSecret != nil {
+	if a.updateSecret != nil {
 		present++
 	}
 	if a.checkCompletion {
@@ -188,21 +162,22 @@ func (c *LegacyTokenCleanupController) checkCompletion(ctx context.Context) erro
 		return err
 	}
 
-	if !LegacyPullSecretsPresent(pullBindings, secrets) {
+	if !LegacyPullSecretsPresentWithoutLabels(pullBindings, secrets) {
 		c.Log.Info("no more legacy pull secrets present, restarting...")
 		os.Exit(0)
 	}
 	return nil
 }
 
-// LegacyPullSecretsPresent determines if any legacy pull secrets still exist on the cluster.
-func LegacyPullSecretsPresent(pullBindings msiacrpullv1beta1.AcrPullBindingList, secrets corev1.SecretList) bool {
+// LegacyPullSecretsPresentWithoutLabels determines if any legacy pull secrets still exist on the cluster without labels.
+func LegacyPullSecretsPresentWithoutLabels(pullBindings msiacrpullv1beta1.AcrPullBindingList, secrets corev1.SecretList) bool {
+	secretNames := sets.Set[string]{}
 	for _, pullBinding := range pullBindings.Items {
-		if slices.ContainsFunc(secrets.Items, func(secret corev1.Secret) bool {
-			return secret.Name == legacySecretName(pullBinding.ObjectMeta.Name)
-		}) {
-			return true
-		}
+		secretNames.Insert(legacySecretName(pullBinding.ObjectMeta.Name))
 	}
-	return false
+
+	return slices.ContainsFunc(secrets.Items, func(secret corev1.Secret) bool {
+		_, labelled := secret.Labels[ACRPullBindingLabel]
+		return secretNames.Has(secret.ObjectMeta.Name) && !labelled
+	})
 }

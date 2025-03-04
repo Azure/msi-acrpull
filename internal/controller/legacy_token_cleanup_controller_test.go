@@ -14,61 +14,44 @@ import (
 
 func Test_LegacyTokenCleanupController_reconcile(t *testing.T) {
 	for _, testCase := range []struct {
-		name           string
-		acrBinding     *msiacrpullv1beta1.AcrPullBinding
-		serviceAccount *corev1.ServiceAccount
-		legacySecret   *corev1.Secret
+		name         string
+		acrBinding   *msiacrpullv1beta1.AcrPullBinding
+		legacySecret *corev1.Secret
 
 		action *cleanupAction
 	}{
 		{
-			name:       "legacy secret exists, but no new secret generated, do nothing",
-			acrBinding: &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Name: "binding"}},
-			serviceAccount: &corev1.ServiceAccount{
-				ObjectMeta:       metav1.ObjectMeta{Name: "default"},
-				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}},
-			},
-			legacySecret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "binding-msi-acrpull-secret"}},
-		},
-		{
-			name:       "legacy secret exists, new secret generated, clean up service account",
-			acrBinding: &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Name: "binding"}},
-			serviceAccount: &corev1.ServiceAccount{
-				ObjectMeta:       metav1.ObjectMeta{Name: "default"},
-				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}, {Name: "acr-pull-binding-37d7ayn69u"}},
+			name: "legacy secret exists, label the secret",
+			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{Name: "binding"},
 			},
 			legacySecret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "binding-msi-acrpull-secret"}},
 			action: &cleanupAction{
-				updateServiceAccount: &corev1.ServiceAccount{
-					ObjectMeta:       metav1.ObjectMeta{Name: "default"},
-					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "acr-pull-binding-37d7ayn69u"}},
+				updateSecret: &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "binding-msi-acrpull-secret",
+						Labels: map[string]string{
+							"acr.microsoft.com/binding": "binding",
+						},
+					},
 				},
 			},
 		},
 		{
-			name:       "legacy secret exists, new secret generated, service account cleaned up, delete secret",
-			acrBinding: &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Name: "binding"}},
-			serviceAccount: &corev1.ServiceAccount{
-				ObjectMeta:       metav1.ObjectMeta{Name: "default"},
-				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "acr-pull-binding-37d7ayn69u"}},
+			name: "legacy secret exists, already labelled, check for done",
+			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{Name: "binding"},
 			},
-			legacySecret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "binding-msi-acrpull-secret"}},
-			action: &cleanupAction{
-				deleteSecret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "binding-msi-acrpull-secret"}},
-			},
-		},
-		{
-			name:       "legacy secret gone, new secret generated, clean up service account",
-			acrBinding: &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Name: "binding"}},
-			serviceAccount: &corev1.ServiceAccount{
-				ObjectMeta:       metav1.ObjectMeta{Name: "default"},
-				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}, {Name: "acr-pull-binding-37d7ayn69u"}},
-			},
-			action: &cleanupAction{
-				updateServiceAccount: &corev1.ServiceAccount{
-					ObjectMeta:       metav1.ObjectMeta{Name: "default"},
-					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "acr-pull-binding-37d7ayn69u"}},
+			legacySecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "binding-msi-acrpull-secret",
+					Labels: map[string]string{
+						"acr.microsoft.com/binding": "binding",
+					},
 				},
+			},
+			action: &cleanupAction{
+				checkCompletion: true,
 			},
 		},
 	} {
@@ -77,7 +60,7 @@ func Test_LegacyTokenCleanupController_reconcile(t *testing.T) {
 				Client: nil,
 				Log:    ctrl.Log.WithName("test"),
 			}
-			got := controller.reconcile(testCase.acrBinding, testCase.serviceAccount, testCase.legacySecret)
+			got := controller.reconcile(testCase.acrBinding, testCase.legacySecret)
 			if diff := cmp.Diff(testCase.action, got, cmp.AllowUnexported(cleanupAction{})); diff != "" {
 				t.Errorf("-want, +got:\n%s", diff)
 			}

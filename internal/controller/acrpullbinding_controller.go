@@ -242,25 +242,43 @@ func base36sha224(input []byte) string {
 }
 
 const (
-	maxNameLength        = 64 /* longest object name */ - 10 /* length of static content */ - 10 /* length of hash */
+	maxNameLength        = 253 /* longest object name */ - 10 /* length of static content */ - 10 /* length of hash */
 	pullSecretNamePrefix = "acr-pull-"
 )
 
+// pullSecretName generates a human-readable name that marks this secret as being a pull secret, while
+// ensuring that the name that's chosen will be a valid k8s Secret name, regardless of the input.
+// We want the common case to produce a name that's easy to determine a priori, since we expect users to
+// explicitly place the secret into their PodSpec.
+// Example validations for Secret names:
+// error: failed to create secret "..." is invalid: metadata.name: Invalid value: "...": must be no more than 253 characters
+// error: failed to create secret "..." is invalid: metadata.name: Invalid value: "...": a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
 func pullSecretName(acrBindingName string) string {
 	suffix := acrBindingName
 	if len(suffix) > maxNameLength {
 		suffix = suffix[:maxNameLength]
+		suffix = strings.TrimSuffix(suffix, ".") // trailing domain label separators can't be followed by '-'
+		suffix = suffix + "-" + base36sha224([]byte(acrBindingName))[:10]
 	}
-	suffix = strings.TrimSuffix(suffix, ".") // trailing domain label separators can't be followed by '-'
-	return pullSecretNamePrefix + suffix + "-" + base36sha224([]byte(acrBindingName))[:10]
+	return pullSecretNamePrefix + suffix
+}
+
+const legacyPullSecretSuffix = "-msi-acrpull-secret"
+
+func isLegacySecretName(pullSecretName string) bool {
+	return strings.HasSuffix(pullSecretName, legacyPullSecretSuffix)
+}
+
+func pullBindingNameFromLegacySecret(pullSecretName string) string {
+	return strings.TrimSuffix(pullSecretName, legacyPullSecretSuffix)
 }
 
 func legacySecretName(acrBindingName string) string {
-	return fmt.Sprintf("%s-msi-acrpull-secret", acrBindingName)
+	return acrBindingName + legacyPullSecretSuffix
 }
 
 func newPullSecret(acrBinding client.Object,
-	dockerConfig string, scheme *runtime.Scheme, expiry time.Time, now func() time.Time, inputHash string) *corev1.Secret {
+	name, dockerConfig string, scheme *runtime.Scheme, expiry time.Time, now func() time.Time, inputHash string) *corev1.Secret {
 
 	pullSecret := &corev1.Secret{
 		Type: corev1.SecretTypeDockerConfigJson,

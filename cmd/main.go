@@ -89,7 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cleanupRequired := controller.LegacyPullSecretsPresent(pullBindings, secrets)
+	cleanupRequired := controller.LegacyPullSecretsPresentWithoutLabels(pullBindings, secrets)
 
 	// when we've already cleaned up all legacy secrets, we can filter our
 	// informers to only the set of secrets we create and manage
