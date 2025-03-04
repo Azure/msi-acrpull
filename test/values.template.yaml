@@ -1,4 +1,6 @@
+namespace: NAMESPACE
 image: IMAGE_DIGEST
+replicas: 1
 ttlRotationFraction: 0.01
 affinity:
   nodeAffinity:

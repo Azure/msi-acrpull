@@ -1,5 +1,6 @@
 namespace: acrpull
 image: registry/image:tag
+replicas: 2
 nodeSelector: {}
 tolerations: []
 affinity: {}

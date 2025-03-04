@@ -4,4 +4,4 @@ metadata:
   labels:
     app.kubernetes.io/name: acrpull
     app.kubernetes.io/managed-by: Helm
-  name: acrpull
+  name: {{ .Values.namespace }}
