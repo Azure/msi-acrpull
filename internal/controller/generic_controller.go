@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
@@ -178,6 +179,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		updated.ImagePullSecrets = append(updated.ImagePullSecrets, corev1.LocalObjectReference{
 			Name: pullSecret.Name,
 		})
+		sortPullSecrets(updated)
 		logger.WithValues("serviceAccount", crclient.ObjectKeyFromObject(serviceAccount).String()).Info("updating service account to add image pull secret")
 		return &action[O]{updateServiceAccount: updated}
 	}
@@ -193,6 +195,67 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 
 	return r.setSuccessStatus(logger, acrBinding, pullSecret)
 }
+
+// sortPullSecrets ensures the semantically-correct ordering of pull secrets for the service account. The order of pull
+// secrets determines the order in which the kubelet will use these credentials, so managing the order ensures we manage
+// the order of preference for credentials. We enforce the following order:
+// - pull secrets not managed by this controller
+// - v1beta2 secrets (acr-pull-*)
+// - v1beta1 secrets (*-msi-acrpull-secret)
+func sortPullSecrets(serviceAccount *corev1.ServiceAccount) {
+	slices.SortFunc(serviceAccount.ImagePullSecrets, func(a, b corev1.LocalObjectReference) int {
+		var aType, bType pullSecretType
+		for value, into := range map[string]*pullSecretType{
+			a.Name: &aType,
+			b.Name: &bType,
+		} {
+			if isLegacySecretName(value) {
+				*into = pullSecretTypeLegacy
+			}
+			if isSecretName(value) {
+				*into = pullSecretTypeCurrent
+			}
+		}
+		switch aType {
+		case pullSecretTypeUnrelated:
+			switch bType {
+			case pullSecretTypeUnrelated:
+				return strings.Compare(a.Name, b.Name)
+			case pullSecretTypeLegacy:
+				return -1
+			case pullSecretTypeCurrent:
+				return -1
+			}
+		case pullSecretTypeLegacy:
+			switch bType {
+			case pullSecretTypeUnrelated:
+				return 1
+			case pullSecretTypeLegacy:
+				return strings.Compare(a.Name, b.Name)
+			case pullSecretTypeCurrent:
+				return 1
+			}
+		case pullSecretTypeCurrent:
+			switch bType {
+			case pullSecretTypeUnrelated:
+				return 1
+			case pullSecretTypeLegacy:
+				return -1
+			case pullSecretTypeCurrent:
+				return strings.Compare(a.Name, b.Name)
+			}
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+}
+
+type pullSecretType int
+
+const (
+	pullSecretTypeUnrelated pullSecretType = iota
+	pullSecretTypeLegacy
+	pullSecretTypeCurrent
+)
 
 func (r *genericReconciler[O]) cleanUp(acrBinding O,
 	serviceAccount *corev1.ServiceAccount, pullSecrets []corev1.Secret, log logr.Logger) *action[O] {
