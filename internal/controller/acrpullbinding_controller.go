@@ -306,6 +306,10 @@ func pullSecretName(acrBindingName string) string {
 	return pullSecretNamePrefix + suffix
 }
 
+func isSecretName(pullSecretName string) bool {
+	return strings.HasPrefix(pullSecretName, pullSecretNamePrefix)
+}
+
 const legacyPullSecretSuffix = "-msi-acrpull-secret"
 
 func isLegacySecretName(pullSecretName string) bool {
