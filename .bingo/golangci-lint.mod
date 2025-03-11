@@ -4,4 +4,4 @@ go 1.23.0
 
 toolchain go1.23.2
 
-require github.com/golangci/golangci-lint v1.64.4 // cmd/golangci-lint
+require github.com/golangci/golangci-lint v1.64.6 // cmd/golangci-lint
