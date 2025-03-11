@@ -91,6 +91,9 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 			GetServiceAccountName: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
 				return binding.Spec.ServiceAccountName
 			},
+			GetPullSecretName: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
+				return pullSecretName(binding.ObjectMeta.Name)
+			},
 			GetInputsHash: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
 				return inputsHash(binding.Spec)
 			},
@@ -183,11 +186,12 @@ func (r *PullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.M
 		return err
 	}
 	// n.b. we do not need to add the imagePullSecretsField indexer on service accounts since v1beta1 controller does it
+	// n.b. we do not need to add the pullBindingField indexer on service accounts since v1beta1 controller does it
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&msiacrpullv1beta2.AcrPullBinding{}).
 		Named("acr-pull-binding-v1beta2").
-		Owns(&corev1.Secret{}).
+		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForPullSecret(mgr))).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueueV1beta2PullBindingsForServiceAccount(mgr))).
 		Complete(r)
 }
@@ -198,7 +202,7 @@ func indexV1beta2PullBindingByServiceAccount(object crclient.Object) []string {
 		return nil
 	}
 
-	return []string{getServiceAccountName(acrPullBinding.Spec.ServiceAccountName)}
+	return []string{acrPullBinding.Spec.ServiceAccountName}
 }
 
 func enqueueV1beta2PullBindingsForServiceAccount(mgr ctrl.Manager) func(ctx context.Context, object crclient.Object) []reconcile.Request {

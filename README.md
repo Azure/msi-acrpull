@@ -27,6 +27,34 @@ either if they are assigned to the VMSS on which the `acrpull` controller is run
 identity federation to service accounts in the namespace. New deployments of `acrpull` should use the latter approach;
 the former remains as a back-stop for users who have not yet migrated.
 
+## A note on pull secrets
+
+When `Pod`s are created to fulfill `Deployment`s, `DaemonSet`s, _etc_, `pod.spec.imagePullSecrets` is defaulted from
+the pull secrets attached to the `ServiceAccount` referenced in `pod.spec.serviceAccount`, if present. This is a one-time
+action done during admission and the field is immutable afterword. This means that `ACRPullBinding` is, by default, racy.
+A valid series of events looks like this:
+
+1. a user creates an `ACRPullBinding` for a particular service account
+2. the `acrpull` controller creates the pull secret
+3. a user creates a `Deployment` referencing the service account
+4. the `Deployment` controller creates a `Pod`
+5. admission control defaults the list of `imagePullSecrets` on the `Pod` to the current list on the `ServiceAccount`, `[]`
+6. the `acrpull` controller attaches the pull secret to a service account
+7. the `Pod` is in a terminal state, as it references no pull secrets and will never be able to start
+
+This unfortunate series of events is by design and cannot be mitigated if the user expects to confer image pull credentials
+by attaching them to a service account. The only mitigation is to list the pull credential explicitly on the `PodSpec` and
+omit associating a `Pod` with a `ServiceAccount`, unless the association is necessary for some other reason.
+
+In order to make this easy, `acrpull` will mint pull credentials with names known _a priori_. v1beta1 `ACRPullBindings` will
+mint `Secrets` named `<binding-name>-msi-acrpull-secret`, as long as the binding name is short enough that the overall name
+is a valid `Secret` name. v1beta2 `ACRPullBindings` will mint `Secrets` named `acr-pull-<binding-name>`, with the same requirement
+for binding names.
+
+The suggested workflow is, therefore, to assume the name of the pull `Secret` that `acrpull` will generate and list it
+explicitly in the `PodSpec` of any associated `Pods`. If the secret does not yet exist when the `Pod` is scheduled, the
+`kubelet` will re-try the image pull later.
+
 ## Federated Workload Identities
 
 Once an AKS cluster is deployed, create some identity with permissions to interact with an ACR instance:
@@ -143,14 +171,6 @@ We recommend the following steps to migrate:
    so no outage will occur.
 1. Deploy the new `acrpull` controller and VAP.
 1. Upgrade `ACRPullBinding` objects from `v1beta1` to `v1beta2` at your own pace.
-
-### A note on upgrades
-
-If v0.1.5 is installed before v0.1.4 has had time to run to completion, the validating admission policies will not allow
-legacy credentials to be cleaned up. Please upgrade to v0.1.8 to unblock this flow, then follow steps starting from 2 above.
-
-It is **NOT SUPPORTED** to upgrade from v0.1.3 to v0.1.9 or higher. This will break the existing pull bindings on the cluster.
-Ensure that v0.1.4 or v0.1.8 are installed in between v0.1.3 and anything v0.1.9 or higher for a successful upgrade.
 
 ### A note on scopes
 

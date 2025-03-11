@@ -15,7 +15,7 @@ jobs:
       AZURE_TENANT_ID: 72f988bf-86f1-41af-91ab-2d7cd011db47
       AZURE_SUBSCRIPTION_ID: 0cc1cafa-578f-4fa5-8d6b-ddfd8d82e6ea
       UNIQUE_INPUT: '${{ github.base_ref }}-${{ github.head_ref }}-${{ github.job }}-${{ github.run_id }}'
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1

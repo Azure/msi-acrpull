@@ -15,38 +15,7 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
-
-const (
-	serviceAccountField   = ".spec.serviceAccountName"
-	imagePullSecretsField = ".imagePullSecrets"
-)
-
-func indexPullBindingByServiceAccount(object crclient.Object) []string {
-	acrPullBinding, ok := object.(*msiacrpullv1beta1.AcrPullBinding)
-	if !ok {
-		return nil
-	}
-
-	return []string{getServiceAccountName(acrPullBinding.Spec.ServiceAccountName)}
-}
-
-func enqueuePullBindingsForServiceAccount(mgr ctrl.Manager) func(ctx context.Context, object crclient.Object) []reconcile.Request {
-	return func(ctx context.Context, object crclient.Object) []reconcile.Request {
-		var pullBindings msiacrpullv1beta1.AcrPullBindingList
-		if err := mgr.GetClient().List(ctx, &pullBindings, crclient.InNamespace(object.GetNamespace()), crclient.MatchingFields{serviceAccountField: object.GetName()}); err != nil {
-			return nil
-		}
-		var requests []reconcile.Request
-		for _, pullBinding := range pullBindings.Items {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: crclient.ObjectKeyFromObject(&pullBinding),
-			})
-		}
-		return requests
-	}
-}
 
 // genericReconciler reconciles AcrPullBindings
 type genericReconciler[O pullBinding] struct {
@@ -60,6 +29,7 @@ type genericReconciler[O pullBinding] struct {
 	RemoveFinalizer func(O, string) O
 
 	GetServiceAccountName func(O) string
+	GetPullSecretName     func(O) string
 	GetInputsHash         func(O) string
 
 	CreatePullCredential func(context.Context, O, *corev1.ServiceAccount) (string, time.Time, error)
@@ -102,34 +72,39 @@ func (r *genericReconciler[O]) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
-	expectedPullSecretName := pullSecretName(acrBinding.GetName())
-	pullSecret := &corev1.Secret{}
-	if err := r.Client.Get(ctx, k8stypes.NamespacedName{
-		Namespace: req.Namespace,
-		Name:      expectedPullSecretName,
-	}, pullSecret); err != nil {
-		if !apierrors.IsNotFound(err) {
-			msg := "failed to get pull secret"
-			logger.Error(err, msg)
-			return ctrl.Result{}, fmt.Errorf("%s: %w", msg, err)
-		} else {
-			pullSecret = nil
-		}
-	}
-
-	var referencingServiceAccounts corev1.ServiceAccountList
-	if err := r.Client.List(ctx, &referencingServiceAccounts, crclient.InNamespace(acrBinding.GetNamespace()), crclient.MatchingFields{imagePullSecretsField: expectedPullSecretName}); err != nil {
-		msg := "failed to fetch service accounts referencing pull secret"
+	var pullSecrets corev1.SecretList
+	if err := r.Client.List(ctx, &pullSecrets, crclient.InNamespace(acrBinding.GetNamespace()), crclient.MatchingFields{pullBindingField: acrBinding.GetName()}); err != nil {
+		msg := "failed to fetch pull secrets referencing pull binding"
 		logger.Error(err, msg)
 		return ctrl.Result{}, fmt.Errorf("%s: %w", msg, err)
 	}
 
-	action := r.reconcile(ctx, logger, acrBinding, serviceAccount, pullSecret, referencingServiceAccounts.Items)
+	var pullSecretNames []string
+	if len(pullSecrets.Items) == 0 {
+		pullSecretNames = append(pullSecretNames, r.GetPullSecretName(acrBinding))
+	} else {
+		for _, pullSecret := range pullSecrets.Items {
+			pullSecretNames = append(pullSecretNames, pullSecret.ObjectMeta.Name)
+		}
+	}
+
+	var referencingServiceAccounts []corev1.ServiceAccount
+	for _, pullSecret := range pullSecretNames {
+		var serviceAccountList corev1.ServiceAccountList
+		if err := r.Client.List(ctx, &serviceAccountList, crclient.InNamespace(acrBinding.GetNamespace()), crclient.MatchingFields{imagePullSecretsField: pullSecret}); err != nil {
+			msg := "failed to fetch service accounts referencing pull secret"
+			logger.Error(err, msg)
+			return ctrl.Result{}, fmt.Errorf("%s: %w", msg, err)
+		}
+		referencingServiceAccounts = append(referencingServiceAccounts, serviceAccountList.Items...)
+	}
+
+	action := r.reconcile(ctx, logger, acrBinding, serviceAccount, pullSecrets.Items, referencingServiceAccounts)
 
 	return action.execute(ctx, logger, r.Client, r.RequeueAfter(r.now))
 }
 
-func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger, acrBinding O, serviceAccount *corev1.ServiceAccount, pullSecret *corev1.Secret, referencingServiceAccounts []corev1.ServiceAccount) *action[O] {
+func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger, acrBinding O, serviceAccount *corev1.ServiceAccount, pullSecrets []corev1.Secret, referencingServiceAccounts []corev1.ServiceAccount) *action[O] {
 	// examine DeletionTimestamp to determine if acr pull binding is under deletion
 	if acrBinding.GetDeletionTimestamp().IsZero() {
 		// the object is not being deleted, so if it does not have our finalizer,
@@ -140,7 +115,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		}
 	} else {
 		// the object is being deleted, do cleanup as necessary
-		return r.cleanUp(acrBinding, serviceAccount, pullSecret, logger)
+		return r.cleanUp(acrBinding, serviceAccount, pullSecrets, logger)
 	}
 
 	// if the user changed which service account should be bound to this credential, we need to
@@ -151,7 +126,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	for _, extraneous := range extraneousServiceAccounts {
 		updated := extraneous.DeepCopy()
 		updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-			return reference.Name == pullSecretName(acrBinding.GetName())
+			return reference.Name == r.GetPullSecretName(acrBinding)
 		})
 		if len(updated.ImagePullSecrets) != len(extraneous.ImagePullSecrets) {
 			logger.WithValues("serviceAccount", crclient.ObjectKeyFromObject(&extraneous).String()).Info("updating service account to remove image pull secret")
@@ -165,6 +140,13 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err)}
 	}
 
+	expectedPullSecretName := r.GetPullSecretName(acrBinding)
+	var pullSecret *corev1.Secret
+	for _, secret := range pullSecrets {
+		if secret.Name == expectedPullSecretName {
+			pullSecret = &secret
+		}
+	}
 	inputHash := r.GetInputsHash(acrBinding)
 	pullSecretMissing := pullSecret == nil
 	pullSecretNeedsRefresh := !pullSecretMissing && r.NeedsRefresh(r.Logger, pullSecret, r.now)
@@ -178,7 +160,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 			return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error())}
 		}
 
-		newSecret := newPullSecret(acrBinding, dockerConfig, r.Scheme, expiresOn, r.now, inputHash)
+		newSecret := newPullSecret(acrBinding, r.GetPullSecretName(acrBinding), dockerConfig, r.Scheme, expiresOn, r.now, inputHash)
 		logger = logger.WithValues("secret", crclient.ObjectKeyFromObject(newSecret).String())
 		if pullSecret == nil {
 			logger.Info("creating pull credential secret")
@@ -200,11 +182,20 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		return &action[O]{updateServiceAccount: updated}
 	}
 
+	// clean up any extraneous pull secrets that refer to this binding
+	for _, secret := range pullSecrets {
+		if secret.ObjectMeta.Name != expectedPullSecretName {
+			deleted := secret.DeepCopy()
+			logger.WithValues("secret", crclient.ObjectKeyFromObject(deleted).String()).Info("cleaning up extraneous pull credential")
+			return &action[O]{deleteSecret: deleted}
+		}
+	}
+
 	return r.setSuccessStatus(logger, acrBinding, pullSecret)
 }
 
 func (r *genericReconciler[O]) cleanUp(acrBinding O,
-	serviceAccount *corev1.ServiceAccount, pullSecret *corev1.Secret, log logr.Logger) *action[O] {
+	serviceAccount *corev1.ServiceAccount, pullSecrets []corev1.Secret, log logr.Logger) *action[O] {
 	if slices.Contains(acrBinding.GetFinalizers(), msiAcrPullFinalizerName) {
 		// our finalizer is present, so need to clean up ImagePullSecret reference
 		if serviceAccount == nil {
@@ -212,7 +203,7 @@ func (r *genericReconciler[O]) cleanUp(acrBinding O,
 		} else {
 			updated := serviceAccount.DeepCopy()
 			updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-				return reference.Name == pullSecretName(acrBinding.GetName())
+				return reference.Name == r.GetPullSecretName(acrBinding)
 			})
 			if len(updated.ImagePullSecrets) != len(serviceAccount.ImagePullSecrets) {
 				log.WithValues("serviceAccount", crclient.ObjectKeyFromObject(serviceAccount).String()).Info("updating service account to remove image pull secret")
@@ -220,10 +211,11 @@ func (r *genericReconciler[O]) cleanUp(acrBinding O,
 			}
 		}
 
-		// remove the secret
-		if pullSecret != nil {
-			log.WithValues("secret", crclient.ObjectKeyFromObject(pullSecret).String()).Info("cleaning up pull credential")
-			return &action[O]{deleteSecret: pullSecret}
+		// remove the secrets
+		for _, pullSecret := range pullSecrets {
+			deleted := pullSecret.DeepCopy()
+			log.WithValues("secret", crclient.ObjectKeyFromObject(deleted).String()).Info("cleaning up pull credential")
+			return &action[O]{deleteSecret: deleted}
 		}
 
 		// remove our finalizer from the list and update it.

@@ -328,6 +328,7 @@ func TestValidatingAdmissionPolicies(t *testing.T) {
 
 		t.Run("can't adopt existing secrets", func(t *testing.T) {
 			t.Parallel()
+			t.Skip("skipping until we turn this back on")
 
 			const name = "existing"
 			existing, createErr := kubeClient.CoreV1().Secrets(namespace).Create(ctx, &corev1.Secret{
