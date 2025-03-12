@@ -121,14 +121,20 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	}
 
 	// if the user changed which service account should be bound to this credential, we need to
-	// un-bind the credential from any service accounts it was bound to previously
+	// un-bind the credential from any service accounts it was bound to previously; if we're in
+	// the middle of cleaning up old pull secrets from this binding, we need to make sure all of
+	// them are removed from the previous service account
+	pullSecretNames := sets.Set[string]{}
+	for _, pullSecret := range pullSecrets {
+		pullSecretNames.Insert(pullSecret.ObjectMeta.Name)
+	}
 	extraneousServiceAccounts := slices.DeleteFunc(referencingServiceAccounts, func(other corev1.ServiceAccount) bool {
 		return serviceAccount != nil && other.Name == serviceAccount.Name
 	})
 	for _, extraneous := range extraneousServiceAccounts {
 		updated := extraneous.DeepCopy()
 		updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
-			return reference.Name == r.GetPullSecretName(acrBinding)
+			return reference.Name == r.GetPullSecretName(acrBinding) || pullSecretNames.Has(reference.Name)
 		})
 		if len(updated.ImagePullSecrets) != len(extraneous.ImagePullSecrets) {
 			logger.WithValues("serviceAccount", crclient.ObjectKeyFromObject(&extraneous).String()).Info("updating service account to remove image pull secret")
