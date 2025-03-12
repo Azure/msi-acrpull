@@ -576,6 +576,68 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "everything up-to-date, extraneous pull secret reference cleaned up",
+			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
+				Spec: msiacrpullv1beta1.AcrPullBindingSpec{
+					ServiceAccountName: "delegate",
+				},
+				Status: msiacrpullv1beta1.AcrPullBindingStatus{
+					LastTokenRefreshTime: &metav1.Time{Time: fakeClock.Now()},
+					TokenExpirationTime:  &metav1.Time{Time: longExpiry},
+				},
+			},
+			serviceAccount: &corev1.ServiceAccount{
+				ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
+				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}, {Name: "binding-msi-acrpull-secret-whatever"}},
+			},
+			referencingServiceAccounts: []corev1.ServiceAccount{
+				{
+					ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
+					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}, {Name: "binding-msi-acrpull-secret-whatever"}},
+				},
+			},
+			pullSecrets: []corev1.Secret{{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns", Name: "binding-msi-acrpull-secret",
+					Labels: map[string]string{
+						"acr.microsoft.com/binding": "binding",
+					},
+					Annotations: map[string]string{
+						"acr.microsoft.com/token.expiry":  longExpiry.Format(time.RFC3339),
+						"acr.microsoft.com/token.refresh": fakeClock.Now().Format(time.RFC3339),
+						"acr.microsoft.com/token.inputs":  "2wucoufm4eqegr6z5nmg00bvmwguubf86kfxk6yir9pw",
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion:         "msi-acrpull.microsoft.com/v1beta1",
+							Kind:               "AcrPullBinding",
+							Name:               "binding",
+							Controller:         ptr.To(true),
+							BlockOwnerDeletion: ptr.To(true),
+						},
+					},
+				},
+				Type: corev1.SecretTypeDockerConfigJson,
+				Data: map[string][]byte{
+					".dockerconfigjson": []byte(`{"auths":{"DefaultACRServer":{"username":"00000000-0000-0000-0000-000000000000","password":"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJ0ZXN0LmF6dXJlY3IuaW8iLCJleHAiOjExMzYzMDA2NDUsImdyYW50X3R5cGUiOiJyZWZyZXNoX3Rva2VuIiwiaWF0IjoxMTM2MDQxNDQ1LCJpc3MiOiJBenVyZSBDb250YWluZXIgUmVnaXN0cnkiLCJqdGkiOiJiYjhkNmQzZC1jN2IwLTRmOTYtYTM5MC04NzM4ZjczMGU4YzYiLCJuYmYiOjExMzYxMjc4NDUsInBlcm1pc3Npb25zIjp7ImFjdGlvbnMiOlsicmVhZCJdfSwidmVyc2lvbiI6MX0.lb8wJOjWSmpVBX-qf0VTjRTKcSiPsqDAe_g-Fow_3LHcqXUyfRspjmFmH9YtaFN3TsA72givXOBE_UQSj2i1CPshvXVfpGuJRPssy_olq1uzfr2L8w6AL1jwM96gCP3e2Od5YT8p6Dbg4RDoBy5xz1zHluoUH2-4jiCh81bRzyAjQGZmKf1MQygLVHHuCjLlijpdw2wHp5nB4m27Yi5z5rrgLzcvXQnSEGIj2t0BY_AuNRbffEFCCFHeDlu6ud1F-Ak35ljIWhkJumP3Zud-rPdIc1YeCQCSGT2-yk4epVX_N4UPsk3hc6XeZxC4ctu9UX9mqfSNe5ZZlO6dtt963A","email":"msi-acrpull@azurecr.io","auth":"MDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwOmV5SmhiR2NpT2lKRlV6STFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUpoZFdRaU9pSjBaWE4wTG1GNmRYSmxZM0l1YVc4aUxDSmxlSEFpT2pFeE16WXpNREEyTkRVc0ltZHlZVzUwWDNSNWNHVWlPaUp5WldaeVpYTm9YM1J2YTJWdUlpd2lhV0YwSWpveE1UTTJNRFF4TkRRMUxDSnBjM01pT2lKQmVuVnlaU0JEYjI1MFlXbHVaWElnVW1WbmFYTjBjbmtpTENKcWRHa2lPaUppWWpoa05tUXpaQzFqTjJJd0xUUm1PVFl0WVRNNU1DMDROek00Wmpjek1HVTRZellpTENKdVltWWlPakV4TXpZeE1qYzRORFVzSW5CbGNtMXBjM05wYjI1eklqcDdJbUZqZEdsdmJuTWlPbHNpY21WaFpDSmRmU3dpZG1WeWMybHZiaUk2TVgwLmxiOHdKT2pXU21wVkJYLXFmMFZUalJUS2NTaVBzcURBZV9nLUZvd18zTEhjcVhVeWZSc3BqbUZtSDlZdGFGTjNUc0E3MmdpdlhPQkVfVVFTajJpMUNQc2h2WFZmcEd1SlJQc3N5X29scTF1emZyMkw4dzZBTDFqd005NmdDUDNlMk9kNVlUOHA2RGJnNFJEb0J5NXh6MXpIbHVvVUgyLTRqaUNoODFiUnp5QWpRR1ptS2YxTVF5Z0xWSEh1Q2pMbGlqcGR3MndIcDVuQjRtMjdZaTV6NXJyZ0x6Y3ZYUW5TRUdJajJ0MEJZX0F1TlJiZmZFRkNDRkhlRGx1NnVkMUYtQWszNWxqSVdoa0p1bVAzWnVkLXJQZEljMVllQ1FDU0dUMi15azRlcFZYX040VVBzazNoYzZYZVp4QzRjdHU5VVg5bXFmU05lNVpabE82ZHR0OTYzQQ=="}}}`),
+				},
+			}, {
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns", Name: "binding-msi-acrpull-secret-whatever",
+					Labels: map[string]string{
+						"acr.microsoft.com/binding": "binding",
+					},
+				},
+			}},
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
+				updateServiceAccount: &corev1.ServiceAccount{
+					ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
+					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}},
+				},
+			},
+		},
+		{
 			name: "everything up-to-date, extraneous pull secret cleaned up",
 			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},

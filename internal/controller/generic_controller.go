@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -181,6 +182,25 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		})
 		sortPullSecrets(updated)
 		logger.WithValues("serviceAccount", crclient.ObjectKeyFromObject(serviceAccount).String()).Info("updating service account to add image pull secret")
+		return &action[O]{updateServiceAccount: updated}
+	}
+
+	// clean up references to any extraneous pull secrets that refer to this binding
+	extraneous := sets.Set[string]{}
+	for _, secret := range pullSecrets {
+		if secret.ObjectMeta.Name != expectedPullSecretName {
+			extraneous.Insert(secret.ObjectMeta.Name)
+		}
+	}
+	if slices.ContainsFunc(serviceAccount.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
+		return extraneous.Has(reference.Name)
+	}) {
+		updated := serviceAccount.DeepCopy()
+		updated.ImagePullSecrets = slices.DeleteFunc(updated.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
+			return extraneous.Has(reference.Name)
+		})
+		sortPullSecrets(updated)
+		logger.WithValues("serviceAccount", crclient.ObjectKeyFromObject(serviceAccount).String()).Info("updating service account to remove extraneous image pull secrets")
 		return &action[O]{updateServiceAccount: updated}
 	}
 
