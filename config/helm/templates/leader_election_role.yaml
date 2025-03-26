@@ -1,40 +1,23 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  labels:
-    app.kubernetes.io/name: acrpull
-    app.kubernetes.io/managed-by: Helm
-  name: acrpull-controller-leader-election
-  namespace: {{ .Values.namespace }}
+  name: msi-acrpull-leader-election-role
+  namespace: msi-acrpull-system
 rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: msi-acrpull-leader-election-rolebinding
+  namespace: msi-acrpull-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: msi-acrpull-leader-election-role
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: msi-acrpull-system
