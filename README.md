@@ -13,7 +13,7 @@ not attempting to handle every possible configuration case with the chart. Pleas
 With the repository cloned down, install with:
 
 ```shell
-helm install ./config/helm
+helm install acrpull ./config/helm
 ```
 
 This will install the custom resource definitions as well as the controllers, in whichever namespace you prefer. A new
