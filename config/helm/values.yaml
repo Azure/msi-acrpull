@@ -1,5 +1,5 @@
 namespace: acrpull
-image: registry/image:tag
+image: mcr.microsoft.com/aks/msi-acrpull:latest
 replicas: 2
 nodeSelector: {}
 tolerations: []
