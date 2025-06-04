@@ -73,7 +73,7 @@ resource pullerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-0
   location: location
 }
 
-// ACR Image Puller Role:
+// ACR Image Puller Role needed by non-ABAC registries. For info on ABAC vs non-ABAC registries, please see https://aka.ms/acr/auth/abac for the correct built-in role to assign for pulling images.
 // https://learn.microsoft.com/en-us/azure/container-registry/container-registry-roles?tabs=azure-cli#pull-image
 // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
 var acrImagePullerId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
@@ -82,6 +82,19 @@ resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-0
   scope: registry
   properties: {
     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', acrImagePullerId)
+    principalType: 'ServicePrincipal'
+    principalId: pullerIdentity.properties.principalId
+  }
+}
+// ACR Container Registry Repository Reader role needed by ABAC-enabled registries. For info on ABAC vs non-ABAC registries, please see https://aka.ms/acr/auth/abac for the correct built-in role to assign for pulling images.
+// https://learn.microsoft.com/en-us/azure/container-registry/container-registry-roles?tabs=azure-cli#pull-image
+// https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
+var acrContainerRepositoryReaderRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // Role ID
+resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(uniqueIdentifier, resourceGroup().id, pullerIdentity.id, acrContainerRepositoryReaderRoleId)
+  scope: registry
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', acrContainerRepositoryReaderRoleId)
     principalType: 'ServicePrincipal'
     principalId: pullerIdentity.properties.principalId
   }
