@@ -76,7 +76,7 @@ resource pullerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-0
 // ACR Image Puller Role needed by non-ABAC registries. For info on ABAC vs non-ABAC registries, please see https://aka.ms/acr/auth/abac for the correct built-in role to assign for pulling images.
 // https://learn.microsoft.com/en-us/azure/container-registry/container-registry-roles?tabs=azure-cli#pull-image
 // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
-var acrImagePullerId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+var acrImagePullerId = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/containers#acrpull
 resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(uniqueIdentifier, resourceGroup().id, pullerIdentity.id, acrImagePullerId)
   scope: registry
@@ -86,15 +86,16 @@ resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-0
     principalId: pullerIdentity.properties.principalId
   }
 }
+
 // ACR Container Registry Repository Reader role needed by ABAC-enabled registries. For info on ABAC vs non-ABAC registries, please see https://aka.ms/acr/auth/abac for the correct built-in role to assign for pulling images.
 // https://learn.microsoft.com/en-us/azure/container-registry/container-registry-roles?tabs=azure-cli#pull-image
 // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
-var acrContainerRepositoryReaderRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d' // Role ID
+var acrContainerRegistryRepositoryReaderId = 'b93aa761-3e63-49ed-ac28-beffa264f7ac' // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/containers#container-registry-repository-reader
 resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(uniqueIdentifier, resourceGroup().id, pullerIdentity.id, acrContainerRepositoryReaderRoleId)
+  name: guid(uniqueIdentifier, resourceGroup().id, pullerIdentity.id, acrContainerRegistryRepositoryReaderId)
   scope: registry
   properties: {
-    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', acrContainerRepositoryReaderRoleId)
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', acrContainerRegistryRepositoryReaderId)
     principalType: 'ServicePrincipal'
     principalId: pullerIdentity.properties.principalId
   }
