@@ -91,7 +91,7 @@ resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-0
 // https://learn.microsoft.com/en-us/azure/container-registry/container-registry-roles?tabs=azure-cli#pull-image
 // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#containers
 var acrContainerRegistryRepositoryReaderId = 'b93aa761-3e63-49ed-ac28-beffa264f7ac' // https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/containers#container-registry-repository-reader
-resource pullerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource pullerAbacRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(uniqueIdentifier, resourceGroup().id, pullerIdentity.id, acrContainerRegistryRepositoryReaderId)
   scope: registry
   properties: {
