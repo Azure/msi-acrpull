@@ -834,7 +834,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			referencingServiceAccounts: []corev1.ServiceAccount{
 				{
 					ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
-					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"},{Name: "previous-binding-msi-acrpull-secret"},{Name: "extraneous"}},
+					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}, {Name: "previous-binding-msi-acrpull-secret"}, {Name: "extraneous"}},
 				},
 			},
 			pullSecrets: []corev1.Secret{{

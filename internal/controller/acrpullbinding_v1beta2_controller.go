@@ -31,8 +31,8 @@ type CoreOpts struct {
 }
 
 type ServiceAccountTokenMinter func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error)
-type armTokenFetcher func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error)
-type armAcrTokenExchanger func(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error)
+type acrAudienceEntraTokenFetcher func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error)
+type acrAudienceEntraTokenExchanger func(ctx context.Context, acrAudienceEntraToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error)
 
 // V1beta2ReconcilerOpts configures the inputs for reconciling v1beta2 pull bindings
 type V1beta2ReconcilerOpts struct {
@@ -43,20 +43,20 @@ type V1beta2ReconcilerOpts struct {
 	ServiceAccountTokenAudience string
 
 	// exposed here to allow unit tests to over-write them
-	mintToken                   ServiceAccountTokenMinter
-	fetchArmToken               armTokenFetcher
-	exchangeArmTokenForAcrToken armAcrTokenExchanger
+	mintToken                                ServiceAccountTokenMinter
+	fetchACRAudienceEntraToken               acrAudienceEntraTokenFetcher
+	exchangeACRAudienceEntraTokenForAcrToken acrAudienceEntraTokenExchanger
 }
 
 func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 	if opts.now == nil {
 		opts.now = time.Now
 	}
-	if opts.fetchArmToken == nil {
-		opts.fetchArmToken = authorizer.ARMTokenForBinding
+	if opts.fetchACRAudienceEntraToken == nil {
+		opts.fetchACRAudienceEntraToken = authorizer.ACRAudienceEntraTokenForBinding
 	}
-	if opts.exchangeArmTokenForAcrToken == nil {
-		opts.exchangeArmTokenForAcrToken = authorizer.ExchangeACRAccessTokenForSpec
+	if opts.exchangeACRAudienceEntraTokenForAcrToken == nil {
+		opts.exchangeACRAudienceEntraTokenForAcrToken = authorizer.ExchangeACRAccessTokenForSpec
 	}
 	if opts.mintToken == nil {
 		opts.mintToken = func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error) {
@@ -126,12 +126,12 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 					token = response.Status.Token
 				}
 
-				armToken, err := opts.fetchArmToken(ctx, binding.Spec, tenantId, clientId, token)
+				acrAudienceEntraToken, err := opts.fetchACRAudienceEntraToken(ctx, binding.Spec, tenantId, clientId, token)
 				if err != nil {
-					return "", time.Time{}, fmt.Errorf("failed to retrieve ARM token: %v", err)
+					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR audience Entra token: %v", err)
 				}
 
-				acrToken, err := opts.exchangeArmTokenForAcrToken(ctx, armToken, binding.Spec.ACR)
+				acrToken, err := opts.exchangeACRAudienceEntraTokenForAcrToken(ctx, acrAudienceEntraToken, binding.Spec.ACR)
 				if err != nil {
 					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR token: %v", err)
 				}

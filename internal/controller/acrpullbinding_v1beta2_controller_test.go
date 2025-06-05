@@ -50,7 +50,7 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 		pullSecrets                []corev1.Secret
 		referencingServiceAccounts []corev1.ServiceAccount
 
-		tokenStub func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger)
+		tokenStub func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger)
 
 		output *action[*msiacrpullv1beta2.AcrPullBinding]
 	}{
@@ -392,7 +392,7 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 						},
 					},
 					Status: msiacrpullv1beta2.AcrPullBindingStatus{
-						Error: `failed to retrieve ARM token: oops`,
+						Error: `failed to retrieve ACR audience Entra token: oops`,
 					},
 				},
 			},
@@ -1534,17 +1534,17 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 			if testCase.tokenStub == nil {
 				testCase.tokenStub = noopTokenStub()
 			}
-			createToken, fetchArmToken, exchangeArmTokenForAcrToken := testCase.tokenStub(t, testCase.acrBinding, testCase.serviceAccount)
+			createToken, fetchACRAudienceEntraToken, exchangeACRAudienceEntraTokenForAcrToken := testCase.tokenStub(t, testCase.acrBinding, testCase.serviceAccount)
 			controller := NewV1beta2Reconciler(&V1beta2ReconcilerOpts{
 				CoreOpts: CoreOpts{
 					Logger: logger,
 					Scheme: scheme.Scheme,
 					now:    fakeClock.Now,
 				},
-				mintToken:                   createToken,
-				fetchArmToken:               fetchArmToken,
-				exchangeArmTokenForAcrToken: exchangeArmTokenForAcrToken,
-				TTLRotationFraction:         0.5,
+				mintToken:                                createToken,
+				fetchACRAudienceEntraToken:               fetchACRAudienceEntraToken,
+				exchangeACRAudienceEntraTokenForAcrToken: exchangeACRAudienceEntraTokenForAcrToken,
+				TTLRotationFraction:                      0.5,
 			})
 
 			output := controller.reconcile(context.Background(), logger, testCase.acrBinding, testCase.serviceAccount, testCase.pullSecrets, testCase.referencingServiceAccounts)
@@ -1555,38 +1555,38 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 	}
 }
 
-func noopTokenStub() func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
-	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
+func noopTokenStub() func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
+	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
 		return func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error) {
 				return nil, errors.New("unexpected call to SA token request")
 			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
-				return azcore.AccessToken{}, errors.New("unexpected call to ARM token request")
-			}, func(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
-				return azcore.AccessToken{}, errors.New("unexpected call to ARM ACR token exchange")
+				return azcore.AccessToken{}, errors.New("unexpected call to ACR audience Entra token request")
+			}, func(ctx context.Context, acrAudienceEntraToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
+				return azcore.AccessToken{}, errors.New("unexpected call to ACR token exchange")
 			}
 	}
 }
 
-func managedIdentityValidatingTokenStub(output azcore.AccessToken, outputError error) func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
-	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
+func managedIdentityValidatingTokenStub(output azcore.AccessToken, outputError error) func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
+	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
 		return func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error) {
 				return nil, errors.New("unexpected call to SA token request for managed identity")
 			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
-				assert.Empty(t, cmp.Diff(spec, binding.Spec), "arm token request binding spec mismatch")
-				assert.Empty(t, serviceAccount.Annotations["azure.workload.identity/tenant-id"], "arm token request unexpected tenant id")
-				assert.Empty(t, serviceAccount.Annotations["azure.workload.identity/client-id"], "arm token request unexpected client id")
-				assert.Empty(t, serviceAccountToken, "arm token request unexpected service account token")
+				assert.Empty(t, cmp.Diff(spec, binding.Spec), "ACR audience Entra token request binding spec mismatch")
+				assert.Empty(t, serviceAccount.Annotations["azure.workload.identity/tenant-id"], "ACR audience Entra token request unexpected tenant id")
+				assert.Empty(t, serviceAccount.Annotations["azure.workload.identity/client-id"], "ACR audience Entra token request unexpected client id")
+				assert.Empty(t, serviceAccountToken, "ACR audience Entra token request unexpected service account token")
 				return azcore.AccessToken{Token: "fake-arm-token"}, outputError
-			}, func(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
-				assert.Empty(t, cmp.Diff(spec, binding.Spec.ACR), "acr token exchange binding ACR spec mismatch")
-				assert.Equal(t, "fake-arm-token", armToken.Token, "acr token exchange arm token mismatch")
+			}, func(ctx context.Context, acrAudienceEntraToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
+				assert.Empty(t, cmp.Diff(spec, binding.Spec.ACR), "ACR token exchange binding ACR spec mismatch")
+				assert.Equal(t, "fake-arm-token", acrAudienceEntraToken.Token, "ACR token exchange ACR audience Entra token mismatch")
 				return output, outputError
 			}
 	}
 }
 
-func workloadIdentityValidatingTokenStub(output azcore.AccessToken, outputError error) func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
-	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
+func workloadIdentityValidatingTokenStub(output azcore.AccessToken, outputError error) func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
+	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
 		return func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error) {
 				assert.Equal(t, serviceAccount.Namespace, serviceAccountNamespace, "token request service account namespace doesn't match service account object namespace")
 				assert.Equal(t, serviceAccount.Name, serviceAccountName, "token request service account name doesn't match service account object name")
@@ -1598,21 +1598,21 @@ func workloadIdentityValidatingTokenStub(output azcore.AccessToken, outputError 
 					},
 				}, nil
 			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
-				assert.Empty(t, cmp.Diff(spec, binding.Spec), "arm token request binding spec mismatch")
-				assert.Equal(t, serviceAccount.Annotations["azure.workload.identity/tenant-id"], tenantId, "arm token request tenant id mismatch")
-				assert.Equal(t, serviceAccount.Annotations["azure.workload.identity/client-id"], clientId, "arm token request client id mismatch")
-				assert.Equal(t, "fake-sa-token", serviceAccountToken, "arm token request service account token mismatch")
+				assert.Empty(t, cmp.Diff(spec, binding.Spec), "ACR audience Entra token request binding spec mismatch")
+				assert.Equal(t, serviceAccount.Annotations["azure.workload.identity/tenant-id"], tenantId, "ACR audience Entra token request tenant id mismatch")
+				assert.Equal(t, serviceAccount.Annotations["azure.workload.identity/client-id"], clientId, "ACR audience Entra token request client id mismatch")
+				assert.Equal(t, "fake-sa-token", serviceAccountToken, "ACR audience Entra token request service account token mismatch")
 				return azcore.AccessToken{Token: "fake-arm-token"}, outputError
-			}, func(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
-				assert.Empty(t, cmp.Diff(spec, binding.Spec.ACR), "acr token exchange binding ACR spec mismatch")
-				assert.Equal(t, "fake-arm-token", armToken.Token, "acr token exchange arm token mismatch")
+			}, func(ctx context.Context, acrAudienceEntraToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
+				assert.Empty(t, cmp.Diff(spec, binding.Spec.ACR), "ACR token exchange binding ACR spec mismatch")
+				assert.Equal(t, "fake-arm-token", acrAudienceEntraToken.Token, "ACR token exchange ACR audience Entra token mismatch")
 				return output, outputError
 			}
 	}
 }
 
-func workloadIdentityLiteralValidatingTokenStub(output azcore.AccessToken, outputError error) func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
-	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
+func workloadIdentityLiteralValidatingTokenStub(output azcore.AccessToken, outputError error) func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
+	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, acrAudienceEntraTokenFetcher, acrAudienceEntraTokenExchanger) {
 		return func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error) {
 				assert.Equal(t, serviceAccount.Namespace, serviceAccountNamespace, "token request service account namespace doesn't match service account object namespace")
 				assert.Equal(t, serviceAccount.Name, serviceAccountName, "token request service account name doesn't match service account object name")
@@ -1624,14 +1624,14 @@ func workloadIdentityLiteralValidatingTokenStub(output azcore.AccessToken, outpu
 					},
 				}, nil
 			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
-				assert.Empty(t, cmp.Diff(spec, binding.Spec), "arm token request binding spec mismatch")
-				assert.Equal(t, spec.Auth.WorkloadIdentity.TenantID, tenantId, "arm token request tenant id mismatch")
-				assert.Equal(t, spec.Auth.WorkloadIdentity.ClientID, clientId, "arm token request client id mismatch")
-				assert.Equal(t, "fake-sa-token", serviceAccountToken, "arm token request service account token mismatch")
+				assert.Empty(t, cmp.Diff(spec, binding.Spec), "ACR audience Entra token request binding spec mismatch")
+				assert.Equal(t, spec.Auth.WorkloadIdentity.TenantID, tenantId, "ACR audience Entra token request tenant id mismatch")
+				assert.Equal(t, spec.Auth.WorkloadIdentity.ClientID, clientId, "ACR audience Entra token request client id mismatch")
+				assert.Equal(t, "fake-sa-token", serviceAccountToken, "ACR audience Entra token request service account token mismatch")
 				return azcore.AccessToken{Token: "fake-arm-token"}, outputError
-			}, func(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
-				assert.Empty(t, cmp.Diff(spec, binding.Spec.ACR), "acr token exchange binding ACR spec mismatch")
-				assert.Equal(t, "fake-arm-token", armToken.Token, "acr token exchange arm token mismatch")
+			}, func(ctx context.Context, acrAudienceEntraToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
+				assert.Empty(t, cmp.Diff(spec, binding.Spec.ACR), "ACR token exchange binding ACR spec mismatch")
+				assert.Equal(t, "fake-arm-token", acrAudienceEntraToken.Token, "ACR token exchange ACR audience Entra token mismatch")
 				return output, outputError
 			}
 	}
