@@ -26,10 +26,10 @@ func (az *Authorizer) AcquireACRAccessToken(ctx context.Context, identityResourc
 	} else {
 		return azcore.AccessToken{}, fmt.Errorf("either a client ID or a resource ID is required")
 	}
-	armToken, err := AcquireARMToken(ctx, id)
+	acrAudienceEntraToken, err := AcquireACRAudienceEntraToken(ctx, id)
 	if err != nil {
-		return azcore.AccessToken{}, fmt.Errorf("failed to get ARM access token: %w", err)
+		return azcore.AccessToken{}, fmt.Errorf("failed to get ACR audience Entra token: %w", err)
 	}
 
-	return ExchangeACRAccessToken(ctx, armToken, acrFQDN, scope)
+	return ExchangeACRAccessToken(ctx, acrAudienceEntraToken, acrFQDN, scope)
 }

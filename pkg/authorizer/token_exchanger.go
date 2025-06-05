@@ -16,8 +16,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry"
 )
 
-// ExchangeACRAccessToken exchanges an ARM access token to an ACR access token
-func ExchangeACRAccessToken(ctx context.Context, armToken azcore.AccessToken, acrFQDN, scope string) (azcore.AccessToken, error) {
+// ExchangeACRAccessToken exchanges an ACR audience Entra token to an actual ACR access token
+func ExchangeACRAccessToken(ctx context.Context, acrAudienceEntraToken azcore.AccessToken, acrFQDN, scope string) (azcore.AccessToken, error) {
 	endpoint, err := url.Parse(fmt.Sprintf("https://%s", acrFQDN))
 	if err != nil {
 		return azcore.AccessToken{}, fmt.Errorf("failed to parse ACR endpoint: %w", err)
@@ -28,7 +28,7 @@ func ExchangeACRAccessToken(ctx context.Context, armToken azcore.AccessToken, ac
 		return azcore.AccessToken{}, fmt.Errorf("failed to create ACR authentication client: %w", err)
 	}
 	refreshResponse, err := client.ExchangeAADAccessTokenForACRRefreshToken(ctx, azcontainerregistry.PostContentSchemaGrantTypeAccessToken, endpoint.Hostname(), &azcontainerregistry.AuthenticationClientExchangeAADAccessTokenForACRRefreshTokenOptions{
-		AccessToken: ptr.To(armToken.Token),
+		AccessToken: ptr.To(acrAudienceEntraToken.Token),
 	})
 	if err != nil {
 		return azcore.AccessToken{}, fmt.Errorf("failed to exchange AAD access token for ACR refresh token: %w", err)
@@ -80,6 +80,6 @@ func ExchangeACRAccessToken(ctx context.Context, armToken azcore.AccessToken, ac
 	}, nil
 }
 
-func ExchangeACRAccessTokenForSpec(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
-	return ExchangeACRAccessToken(ctx, armToken, spec.Server, spec.Scope)
+func ExchangeACRAccessTokenForSpec(ctx context.Context, acrAudienceEntraToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
+	return ExchangeACRAccessToken(ctx, acrAudienceEntraToken, spec.Server, spec.Scope)
 }

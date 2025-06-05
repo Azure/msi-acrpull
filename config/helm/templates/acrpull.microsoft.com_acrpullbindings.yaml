@@ -77,19 +77,19 @@ spec:
                     description: AirgappedCloudConfiguration configures a custom cloud
                       to interact with when running air-gapped.
                     properties:
+                      acrAudience:
+                        description: ACRAudience configures the audience for which
+                          tokens will be requested from Entra.
+                        minLength: 1
+                        type: string
                       entraAuthorityHost:
                         description: EntraAuthorityHost configures a custom Entra
                           host endpoint.
                         minLength: 1
                         type: string
-                      resourceManagerAudience:
-                        description: ResourceManagerAudience configures the audience
-                          for which tokens will be requested from Entra.
-                        minLength: 1
-                        type: string
                     required:
+                    - acrAudience
                     - entraAuthorityHost
-                    - resourceManagerAudience
                     type: object
                   environment:
                     default: PublicCloud
