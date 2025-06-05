@@ -88,7 +88,7 @@ func environment(input msiacrpullv1beta2.AzureEnvironmentType, config *msiacrpul
 			ActiveDirectoryAuthorityHost: config.EntraAuthorityHost,
 			Services: map[cloud.ServiceName]cloud.ServiceConfiguration{
 				azcontainerregistry.ServiceName: {
-					Audience: config.ResourceManagerAudience,
+					Audience: config.ACRAudience,
 				},
 			},
 		}
@@ -98,6 +98,12 @@ func environment(input msiacrpullv1beta2.AzureEnvironmentType, config *msiacrpul
 
 	if env.Services == nil {
 		env.Services = map[cloud.ServiceName]cloud.ServiceConfiguration{}
+	} else {
+		existing := env.Services
+		env.Services = make(map[cloud.ServiceName]cloud.ServiceConfiguration, len(existing)+1)
+		for k, v := range existing {
+			env.Services[k] = v
+		}
 	}
 	env.Services[azcontainerregistry.ServiceName] = cloud.ServiceConfiguration{Audience: defaultACRAudience}
 	return env

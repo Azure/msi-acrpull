@@ -128,12 +128,12 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 
 				acrAudienceEntraToken, err := opts.fetchACRAudienceEntraToken(ctx, binding.Spec, tenantId, clientId, token)
 				if err != nil {
-					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR audience Entra token: %v", err)
+					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR audience Entra token: %w", err)
 				}
 
 				acrToken, err := opts.exchangeACRAudienceEntraTokenForAcrToken(ctx, acrAudienceEntraToken, binding.Spec.ACR)
 				if err != nil {
-					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR token: %v", err)
+					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR token: %w", err)
 				}
 
 				dockerConfig, err := authorizer.CreateACRDockerCfg(binding.Spec.ACR.Server, acrToken)
