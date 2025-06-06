@@ -31,7 +31,7 @@ type CoreOpts struct {
 }
 
 type ServiceAccountTokenMinter func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error)
-type armTokenFetcher func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error)
+type armTokenFetcher func(ctx context.Context, logger logr.Logger, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error)
 type armAcrTokenExchanger func(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error)
 
 // V1beta2ReconcilerOpts configures the inputs for reconciling v1beta2 pull bindings
@@ -97,7 +97,7 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 			GetInputsHash: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
 				return inputsHash(binding.Spec)
 			},
-			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
+			CreatePullCredential: func(ctx context.Context, logger logr.Logger, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				var tenantId, clientId, token string
 				if binding.Spec.Auth.WorkloadIdentity != nil {
 					if binding.Spec.Auth.WorkloadIdentity.TenantID != "" {
@@ -126,7 +126,7 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 					token = response.Status.Token
 				}
 
-				armToken, err := opts.fetchArmToken(ctx, binding.Spec, tenantId, clientId, token)
+				armToken, err := opts.fetchArmToken(ctx, logger, binding.Spec, tenantId, clientId, token)
 				if err != nil {
 					return "", time.Time{}, fmt.Errorf("failed to retrieve ARM token: %v", err)
 				}

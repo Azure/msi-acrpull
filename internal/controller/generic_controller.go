@@ -34,7 +34,7 @@ type genericReconciler[O pullBinding] struct {
 	GetPullSecretName     func(O) string
 	GetInputsHash         func(O) string
 
-	CreatePullCredential func(context.Context, O, *corev1.ServiceAccount) (string, time.Time, error)
+	CreatePullCredential func(context.Context, logr.Logger, O, *corev1.ServiceAccount) (string, time.Time, error)
 
 	UpdateStatusError func(O, string) O
 
@@ -162,7 +162,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	if pullSecretMissing || pullSecretNeedsRefresh || pullSecretInputsChanged {
 		logger.WithValues("pullSecretMissing", pullSecretMissing, "pullSecretNeedsRefresh", pullSecretNeedsRefresh, "pullSecretInputsChanged", pullSecretInputsChanged).Info("generating new pull credential")
 
-		dockerConfig, expiresOn, err := r.CreatePullCredential(ctx, acrBinding, serviceAccount)
+		dockerConfig, expiresOn, err := r.CreatePullCredential(ctx, logger, acrBinding, serviceAccount)
 		if err != nil {
 			logger.Info(err.Error())
 			return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error())}

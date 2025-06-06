@@ -91,7 +91,7 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
 				return base36sha224([]byte(msiClientID + msiResourceID + acrServer + binding.Spec.Scope))
 			},
-			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
+			CreatePullCredential: func(ctx context.Context, logger logr.Logger, binding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
 				acrAccessToken, err := opts.Auth.AcquireACRAccessToken(ctx, msiResourceID, msiClientID, acrServer, binding.Spec.Scope)
 				if err != nil {
