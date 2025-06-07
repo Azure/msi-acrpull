@@ -1,5 +1,5 @@
 namespace: acrpull
-image: mcr.microsoft.com/aks/msi-acrpull:latest
+image: mcr.microsoft.com/aks/msi-acrpull:v0.1.17
 replicas: 2
 nodeSelector: {}
 tolerations: []
