@@ -122,6 +122,11 @@ type AuthenticationMethod struct {
 
 	// WorkloadIdentity uses Azure Workload Identity to authenticate with Azure.
 	WorkloadIdentity *WorkloadIdentityAuth `json:"workloadIdentity,omitempty"`
+
+	// +kubebuilder:validation:Optional
+
+	// Federated Identity Creationals for Cross Cloud
+	FederatedIdentity *FederatedIdentityAuth `json:"federatedIdentity,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="[has(self.clientID), has(self.resourceID)].exists_one(x, x)", message="only client or resource ID can be set"
@@ -169,6 +174,64 @@ type WorkloadIdentityAuth struct {
 	// default identity stored in the service account's annotations. The
 	// client and tenant ID must be specified together.
 	TenantID string `json:"tenantID,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="(has(self.sourceClientID) && has(self.SourceTenantID))", message="custom client and tenant identifiers must be provided together, if at all"
+
+type FederatedIdentityAuth struct {
+	// +kubebuilder:validation:Required
+	// +kubebuilder:example="1b461305-28be-5271-beda-bd9fd2e24251"
+
+	// SourceClienTid holds the identified of identity residing on the tenant where request has been made.
+	SourceClientID string `json:"sourceClientID,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:example="72f988bf-86f1-41af-91ab-2d7cd011db47"
+
+	// TenantID holds an optional tenant identifier of a federated identity.
+	// Specify this identifier if multiple identities are federated with the
+	// service account and the identity to use for image pulling is not the
+	// default identity stored in the service account's annotations. The
+	// client and tenant ID must be specified together.
+	SourceTenantID string `json:"sourceTenantID,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:example="1b461305-28be-5271-beda-bd9fd2e24251"
+
+	// ClientID holds an optional client identifier of a federated identity.
+	// Specify this identifier if multiple identities are federated with the
+	// service account and the identity to use for image pulling is not the
+	// default identity stored in the service account's annotations. The
+	// client and tenant ID must be specified together.
+	TargetClientID string `json:"targetClientID,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:example="72f988bf-86f1-41af-91ab-2d7cd011db47"
+
+	// TenantID holds an optional tenant identifier of a federated identity.
+	// Specify this identifier if multiple identities are federated with the
+	// service account and the identity to use for image pulling is not the
+	// default identity stored in the service account's annotations. The
+	// client and tenant ID must be specified together.
+	TargetTenantID string `json:"targetTenantID,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:example="72f988bf-86f1-41af-91ab-2d7cd011db47"
+
+	// TenantID holds an optional tenant identifier of a federated identity.
+	// Specify this identifier if multiple identities are federated with the
+	// service account and the identity to use for image pulling is not the
+	// default identity stored in the service account's annotations. The
+	// client and tenant ID must be specified together.
+	Scope string `json:"scope,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=PublicCloud;USGovernmentCloud;ChinaCloud;AirgappedCloud
+	// +kubebuilder:default=PublicCloud
+	// +kubebuilder:example=PublicCloud
+
+	// Environment specifies the Azure Cloud environment in which the ACR is deployed.
+	TargetEnvironment AzureEnvironmentType `json:"targetEnvironment,omitempty"`
 }
 
 // AcrPullBindingStatus defines the observed state of AcrPullBinding

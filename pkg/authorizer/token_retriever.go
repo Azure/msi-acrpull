@@ -10,6 +10,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 )
 
@@ -36,6 +38,7 @@ func ARMTokenForBinding(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindi
 
 	var credential azcore.TokenCredential
 	var err error
+	
 	switch {
 	case spec.Auth.ManagedIdentity != nil:
 		var id azidentity.ManagedIDKind
@@ -45,7 +48,7 @@ func ARMTokenForBinding(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindi
 			id = azidentity.ResourceID(spec.Auth.ManagedIdentity.ResourceID)
 		}
 		credential, err = azidentity.NewManagedIdentityCredential(&azidentity.ManagedIdentityCredentialOptions{ID: id})
-	case spec.Auth.WorkloadIdentity != nil:
+	case spec.Auth.WorkloadIdentity != nil || spec.Auth.FederatedIdentity != nil:
 		// n.b. the built-in azidentity.WorkloadIdentityCredential assumes we're loading a service account token
 		// from a file in a Pod, where the Kubernetes API server is rotating it, etc. Unfortunately that is not
 		// our use-case here, and we certainly don't want to centralize every service account token we ever mint
@@ -68,7 +71,15 @@ func ARMTokenForBinding(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindi
 		// this should never happen with the validation we have on the CRD
 		panic(fmt.Errorf("programmer error: ACRPullBinding.Spec.Auth has no method: %#v", spec.Auth))
 	}
-	return credential.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{env.Services[cloud.ResourceManager].Audience + "/.default"}})
+	
+	// Default Audience to the Resource Manager audience for the environment
+	var audience string = env.Services[cloud.ResourceManager].Audience
+
+	if spec.Auth.FederatedIdentity != nil {
+		audience = "api://AzureADTokenExchange"		
+	}
+
+	return credential.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{audience + "/.default"}})
 }
 
 func environment(input msiacrpullv1beta2.AzureEnvironmentType, config *msiacrpullv1beta2.AirgappedCloudConfiguration) cloud.Configuration {
