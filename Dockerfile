@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.23-fips-azurelinux3.0 as builder
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25-fips-azurelinux3.0 as builder
 ARG TARGETOS
 ARG TARGETARCH
 
