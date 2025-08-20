@@ -20,6 +20,10 @@ import (
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+
 )
 
 type CoreOpts struct {
@@ -99,7 +103,27 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 			},
 			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				var tenantId, clientId, token string
-				if binding.Spec.Auth.WorkloadIdentity != nil {
+				if binding.Spec.Auth.FederatedIdentity != nil {
+					fmt.Printf("Using Federated Identity Credentials %s %s\n", binding.Spec.Auth.FederatedIdentity.SourceTenantID, binding.Spec.Auth.FederatedIdentity.SourceClientID)
+
+					tenantId = binding.Spec.Auth.FederatedIdentity.SourceTenantID
+					clientId = binding.Spec.Auth.FederatedIdentity.SourceClientID
+
+					msiCred, err := azidentity.NewDefaultAzureCredential(nil)
+					
+					if err != nil {
+						return "", time.Time{}, fmt.Errorf("failed to get MSI token: %w", err)
+					}
+
+					msiToken, err := msiCred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{binding.Spec.Auth.FederatedIdentity.Scope + "/.default"}})
+					fmt.Printf("MSI Token scope: %s\n", binding.Spec.Auth.FederatedIdentity.Scope )
+					
+					if err != nil {
+						return "", time.Time{}, fmt.Errorf("Msi  Token: %v", err)
+					}
+					
+					token = msiToken.Token
+				} else if binding.Spec.Auth.WorkloadIdentity != nil {
 					if binding.Spec.Auth.WorkloadIdentity.TenantID != "" {
 						tenantId = binding.Spec.Auth.WorkloadIdentity.TenantID
 						clientId = binding.Spec.Auth.WorkloadIdentity.ClientID
@@ -131,7 +155,33 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 					return "", time.Time{}, fmt.Errorf("failed to retrieve ARM token: %v", err)
 				}
 
-				acrToken, err := opts.exchangeArmTokenForAcrToken(ctx, armToken, binding.Spec.ACR)
+				var exchangeToken azcore.AccessToken
+
+				if binding.Spec.Auth.FederatedIdentity != nil {
+					env := environment(binding.Spec.Auth.FederatedIdentity.TargetEnvironment)
+					
+					assertionFunc := func(ctx context.Context) (string, error) {
+						return armToken.Token, nil
+					}
+
+					// Token 2
+					ficCred, err := azidentity.NewClientAssertionCredential(binding.Spec.Auth.FederatedIdentity.TargetTenantID, binding.Spec.Auth.FederatedIdentity.TargetClientID, assertionFunc, nil)
+					if err != nil {
+						return "", time.Time{}, fmt.Errorf("WW Token: %v", err)
+					}
+
+					ficToken, err := ficCred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{ env.Services[cloud.ResourceManager].Audience + "/.default"}})
+					if err != nil {
+						return "", time.Time{}, fmt.Errorf("WW Token: %v", err)
+					}
+
+					exchangeToken = ficToken
+					
+				} else {
+					exchangeToken = armToken
+				}
+
+				acrToken, err := opts.exchangeArmTokenForAcrToken(ctx, exchangeToken, binding.Spec.ACR)
 				if err != nil {
 					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR token: %v", err)
 				}
@@ -250,4 +300,17 @@ func refreshBoundary(refresh, expiry time.Time, ttlRotationFraction float64) tim
 // needsRefresh determines if the TTL fraction required for rotation has passed since the last refresh
 func needsRefresh(now func() time.Time, refresh, expiry time.Time, ttlRotationFraction float64) bool {
 	return now().After(refreshBoundary(refresh, expiry, ttlRotationFraction))
+}
+
+func environment(input msiacrpullv1beta2.AzureEnvironmentType) cloud.Configuration {
+	switch input {
+	case msiacrpullv1beta2.AzureEnvironmentPublicCloud:
+		return cloud.AzurePublic
+	case msiacrpullv1beta2.AzureEnvironmentUSGovernmentCloud:
+		return cloud.AzureGovernment
+	case msiacrpullv1beta2.AzureEnvironmentChinaCloud:
+		return cloud.AzureChina
+	default:
+		panic(fmt.Errorf("unsupported msiacrpullv1beta2.AzureEnvironmentType: %s", input))
+	}
 }
