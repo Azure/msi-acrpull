@@ -229,10 +229,14 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	var eventFilter predicate.Predicate
 	if labelSelectorValue != "" {
-		eventFilter = predicate.NewPredicateFuncs(func(obj client.Object) bool {
-			_, ok := obj.GetLabels()["acr.microsoft.com/xyz"]
-			return ok
-		})
+		selector, err := metav1.ParseToLabelSelector(labelSelectorValue)
+		if err != nil {
+			return fmt.Errorf("failed to parse label selector %q: %w", labelSelectorValue, err)
+		}
+		eventFilter, err = predicate.LabelSelectorPredicate(*selector)
+		if err != nil {
+			return fmt.Errorf("failed to create label selector predicate for %q: %w", labelSelectorValue, err)
+		}
 	} else {
 		eventFilter = predicate.NewPredicateFuncs(func(obj client.Object) bool { return true })
 	}
