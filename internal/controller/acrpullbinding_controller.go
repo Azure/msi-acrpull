@@ -18,8 +18,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -197,7 +199,7 @@ func extractPullSecretTimeAnnotation(log logr.Logger, secret *corev1.Secret, ann
 	return timestamp
 }
 
-func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, labelSelectorValue string) error {
 	if r.now == nil {
 		r.now = time.Now
 	}
@@ -225,8 +227,18 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		return err
 	}
 
+	var eventFilter predicate.Predicate
+	if labelSelectorValue != "" {
+		eventFilter = predicate.NewPredicateFuncs(func(obj client.Object) bool {
+			_, ok := obj.GetLabels()["acr.microsoft.com/xyz"]
+			return ok
+		})
+	} else {
+		eventFilter = predicate.NewPredicateFuncs(func(obj client.Object) bool { return true })
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&msiacrpullv1beta1.AcrPullBinding{}).
+		For(&msiacrpullv1beta1.AcrPullBinding{}, builder.WithPredicates(eventFilter)).
 		Named("acr-pull-binding").
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForPullSecret(mgr))).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).

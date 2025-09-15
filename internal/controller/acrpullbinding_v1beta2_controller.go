@@ -17,8 +17,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -181,15 +184,25 @@ type PullBindingReconciler struct {
 	*genericReconciler[*msiacrpullv1beta2.AcrPullBinding]
 }
 
-func (r *PullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+func (r *PullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, labelSelectorValue string) error {
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &msiacrpullv1beta2.AcrPullBinding{}, serviceAccountField, indexV1beta2PullBindingByServiceAccount); err != nil {
 		return err
 	}
 	// n.b. we do not need to add the imagePullSecretsField indexer on service accounts since v1beta1 controller does it
 	// n.b. we do not need to add the pullBindingField indexer on service accounts since v1beta1 controller does it
 
+	var eventFilter predicate.Predicate
+	if labelSelectorValue != "" {
+		eventFilter = predicate.NewPredicateFuncs(func(obj client.Object) bool {
+			_, ok := obj.GetLabels()["acr.microsoft.com/xyz"]
+			return ok
+		})
+	} else {
+		eventFilter = predicate.NewPredicateFuncs(func(obj client.Object) bool { return true })
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&msiacrpullv1beta2.AcrPullBinding{}).
+		For(&msiacrpullv1beta2.AcrPullBinding{}, builder.WithPredicates(eventFilter)).
 		Named("acr-pull-binding-v1beta2").
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForPullSecret(mgr))).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueueV1beta2PullBindingsForServiceAccount(mgr))).
