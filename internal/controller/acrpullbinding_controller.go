@@ -15,13 +15,12 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -52,6 +51,7 @@ type V1beta1ReconcilerOpts struct {
 	DefaultManagedIdentityResourceID string
 	DefaultManagedIdentityClientID   string
 	DefaultACRServer                 string
+	PullBindingLabelSelectorString   string
 }
 
 func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler {
@@ -135,6 +135,9 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				updated.Status.Error = ""
 				return updated
 			},
+			LabelSelector: func() (labels.Selector, error) {
+				return acrPullBindingLabelSelector(opts.PullBindingLabelSelectorString)
+			},
 			now: opts.now,
 		},
 	}
@@ -177,6 +180,27 @@ func pullSecretRefresh(log logr.Logger, secret *corev1.Secret) time.Time {
 	return extractPullSecretTimeAnnotation(log, secret, tokenRefreshAnnotation)
 }
 
+// acrPullBindingLabelSelector parses a label selector string into a labels.Selector.
+func acrPullBindingLabelSelector(labelSelectorString string) (labels.Selector, error) {
+	trimmed := strings.TrimSpace(labelSelectorString)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	// Try to parse as a metav1.LabelSelector string
+	labelSelector, err := metav1.ParseToLabelSelector(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse label selector %q: %w", trimmed, err)
+	}
+	// Convert metav1.LabelSelector to labels.Selector
+	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert label selector %q to selector: %w", trimmed, err)
+	}
+
+	return selector, nil
+}
+
 // extractPullSecretTimeAnnotation extracts a timestamp from an annotation on the secret
 func extractPullSecretTimeAnnotation(log logr.Logger, secret *corev1.Secret, annotation string) time.Time {
 	if secret == nil {
@@ -199,7 +223,7 @@ func extractPullSecretTimeAnnotation(log logr.Logger, secret *corev1.Secret, ann
 	return timestamp
 }
 
-func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, labelSelectorValue string) error {
+func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if r.now == nil {
 		r.now = time.Now
 	}
@@ -227,22 +251,8 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		return err
 	}
 
-	var eventFilter predicate.Predicate
-	if labelSelectorValue != "" {
-		selector, err := metav1.ParseToLabelSelector(labelSelectorValue)
-		if err != nil {
-			return fmt.Errorf("failed to parse label selector %q: %w", labelSelectorValue, err)
-		}
-		eventFilter, err = predicate.LabelSelectorPredicate(*selector)
-		if err != nil {
-			return fmt.Errorf("failed to create label selector predicate for %q: %w", labelSelectorValue, err)
-		}
-	} else {
-		eventFilter = predicate.NewPredicateFuncs(func(obj client.Object) bool { return true })
-	}
-
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&msiacrpullv1beta1.AcrPullBinding{}, builder.WithPredicates(eventFilter)).
+		For(&msiacrpullv1beta1.AcrPullBinding{}).
 		Named("acr-pull-binding").
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForPullSecret(mgr))).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).
