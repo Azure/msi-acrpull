@@ -69,7 +69,10 @@ func (r *genericReconciler[O]) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, fmt.Errorf("failed to get label selector: %w", err)
 	}
 	if selector != nil && !selector.Matches(labels.Set(acrBinding.GetLabels())) {
-		logger.Info("skipping reconcile: label selector %q does not match %q labels", selector.String(), acrBinding.GetName())
+		logger.Info("skipping reconcile: label selector does not match binding labels",
+			"selector", selector.String(),
+			"binding", acrBinding.GetName(),
+			"labels", acrBinding.GetLabels())
 		return ctrl.Result{}, nil
 	}
 
