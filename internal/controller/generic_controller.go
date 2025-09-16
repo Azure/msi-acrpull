@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -44,6 +45,8 @@ type genericReconciler[O pullBinding] struct {
 	NeedsStatusUpdate func(time.Time, time.Time, O) bool
 	UpdateStatus      func(time.Time, time.Time, O) O
 
+	LabelSelector func() (labels.Selector, error)
+
 	now func() time.Time
 }
 
@@ -57,6 +60,16 @@ func (r *genericReconciler[O]) Reconcile(ctx context.Context, req ctrl.Request) 
 			logger.Error(err, msg)
 			return ctrl.Result{}, fmt.Errorf("%s: %w", msg, err)
 		}
+		return ctrl.Result{}, nil
+	}
+
+	selector, err := r.LabelSelector()
+	if err != nil {
+		logger.Error(err, "failed to get label selector")
+		return ctrl.Result{}, fmt.Errorf("failed to get label selector: %w", err)
+	}
+	if selector != nil && !selector.Matches(labels.Set(acrBinding.GetLabels())) {
+		logger.Info("skipping reconcile: label selector %q does not match %q labels", selector.String(), acrBinding.GetName())
 		return ctrl.Result{}, nil
 	}
 

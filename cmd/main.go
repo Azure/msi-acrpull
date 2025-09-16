@@ -52,6 +52,7 @@ func main() {
 	var probeAddr string
 	var serviceAccountTokenAudience string
 	var ttlRotationFraction float64
+	var labelSelectorString string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -59,6 +60,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&serviceAccountTokenAudience, "service-account-token-audience", "api://AzureCRTokenExchange", "The audience to ask the Kubernetes API server to mint Service Account tokens for, must match Federated Identity Credential configuration in Azure.")
 	flag.Float64Var(&ttlRotationFraction, "ttl-rotation-fraction", 0.5, "The fraction of the pull token's TTL at which the v1beta2 reconciler will refresh the token.")
+	flag.StringVar(&labelSelectorString, "label-selector", "", "Label value to watch for AcrPullBindings")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -132,6 +134,7 @@ func main() {
 		DefaultManagedIdentityResourceID: defaultManagedIdentityResourceID,
 		DefaultManagedIdentityClientID:   defaultManagedIdentityClientID,
 		DefaultACRServer:                 defaultACRServer,
+		PullBindingLabelSelectorString:   labelSelectorString,
 	})
 	if err := apbReconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBinding")
@@ -149,9 +152,10 @@ func main() {
 			Logger: ctrl.Log.WithName("controller").WithName("AcrPullBindingV1beta2"),
 			Scheme: mgr.GetScheme(),
 		},
-		TTLRotationFraction:         ttlRotationFraction,
-		ServiceAccountTokenAudience: serviceAccountTokenAudience,
-		ServiceAccountClient:        kubeClient.CoreV1(),
+		TTLRotationFraction:            ttlRotationFraction,
+		ServiceAccountTokenAudience:    serviceAccountTokenAudience,
+		ServiceAccountClient:           kubeClient.CoreV1(),
+		PullBindingLabelSelectorString: labelSelectorString,
 	})
 	if err := v1beta2Reconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBindingV1beta2")
