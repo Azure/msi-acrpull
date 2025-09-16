@@ -19,8 +19,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -251,8 +253,19 @@ func (r *AcrPullBindingReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		return err
 	}
 
+	labelSelector, err := r.LabelSelector()
+	if err != nil {
+		return fmt.Errorf("failed to get label selector: %w", err)
+	}
+	eventFilter := predicate.NewPredicateFuncs(func(obj client.Object) bool {
+		if labelSelector == nil {
+			return true
+		}
+		return labelSelector.Matches(labels.Set(obj.GetLabels()))
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&msiacrpullv1beta1.AcrPullBinding{}).
+		For(&msiacrpullv1beta1.AcrPullBinding{}, builder.WithPredicates(eventFilter)).
 		Named("acr-pull-binding").
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForPullSecret(mgr))).
 		Watches(&corev1.ServiceAccount{}, handler.EnqueueRequestsFromMapFunc(enqueuePullBindingsForServiceAccount(mgr))).
