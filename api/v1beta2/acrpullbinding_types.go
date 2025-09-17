@@ -105,8 +105,8 @@ type AirgappedCloudConfiguration struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 
-	// ResourceManagerAudience configures the audience for which tokens will be requested from Entra.
-	ResourceManagerAudience string `json:"resourceManagerAudience"`
+	// ACRAudience configures the audience for which tokens will be requested from Entra.
+	ACRAudience string `json:"acrAudience"`
 }
 
 // +kubebuilder:validation:XValidation:rule="[has(self.managedIdentity), has(self.workloadIdentity)].exists_one(x, x)", message="only one authentication type can be set"
