@@ -14,6 +14,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,9 +39,10 @@ type armAcrTokenExchanger func(ctx context.Context, armToken azcore.AccessToken,
 type V1beta2ReconcilerOpts struct {
 	CoreOpts
 
-	TTLRotationFraction         float64
-	ServiceAccountClient        corev1client.ServiceAccountsGetter
-	ServiceAccountTokenAudience string
+	TTLRotationFraction            float64
+	ServiceAccountClient           corev1client.ServiceAccountsGetter
+	ServiceAccountTokenAudience    string
+	PullBindingLabelSelectorString string
 
 	// exposed here to allow unit tests to over-write them
 	mintToken                   ServiceAccountTokenMinter
@@ -170,6 +172,9 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 				updated.Status.LastTokenRefreshTime = &metav1.Time{Time: refresh}
 				updated.Status.Error = ""
 				return updated
+			},
+			LabelSelector: func() (labels.Selector, error) {
+				return acrPullBindingLabelSelector(opts.PullBindingLabelSelectorString)
 			},
 			now: opts.now,
 		},

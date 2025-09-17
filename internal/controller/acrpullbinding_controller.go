@@ -15,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -50,6 +51,7 @@ type V1beta1ReconcilerOpts struct {
 	DefaultManagedIdentityResourceID string
 	DefaultManagedIdentityClientID   string
 	DefaultACRServer                 string
+	PullBindingLabelSelectorString   string
 }
 
 func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler {
@@ -133,6 +135,9 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				updated.Status.Error = ""
 				return updated
 			},
+			LabelSelector: func() (labels.Selector, error) {
+				return acrPullBindingLabelSelector(opts.PullBindingLabelSelectorString)
+			},
 			now: opts.now,
 		},
 	}
@@ -173,6 +178,27 @@ func pullSecretExpiry(log logr.Logger, secret *corev1.Secret) time.Time {
 // pullSecretRefresh determines when a pull credential stored in a Secret was last refreshed
 func pullSecretRefresh(log logr.Logger, secret *corev1.Secret) time.Time {
 	return extractPullSecretTimeAnnotation(log, secret, tokenRefreshAnnotation)
+}
+
+// acrPullBindingLabelSelector parses a label selector string into a labels.Selector.
+func acrPullBindingLabelSelector(labelSelectorString string) (labels.Selector, error) {
+	trimmed := strings.TrimSpace(labelSelectorString)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	// Try to parse as a metav1.LabelSelector string
+	labelSelector, err := metav1.ParseToLabelSelector(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse label selector %q: %w", trimmed, err)
+	}
+	// Convert metav1.LabelSelector to labels.Selector
+	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert label selector %q to selector: %w", trimmed, err)
+	}
+
+	return selector, nil
 }
 
 // extractPullSecretTimeAnnotation extracts a timestamp from an annotation on the secret
