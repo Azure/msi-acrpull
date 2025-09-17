@@ -114,9 +114,20 @@ func main() {
 	}
 
 	// Add label selector for both v1beta1 and v1beta2 AcrPullBinding if label is provided
-	if trimmed := strings.TrimSpace(apbLabelSelectorString); trimmed != "" {
-		setupLog.Info(fmt.Sprintf("Filtering AcrPullBindings for label key: %s", trimmed))
-		labelRequirement, err := labels.NewRequirement(trimmed, selection.Exists, []string{})
+	if trimmedLabelSelector := strings.TrimSpace(apbLabelSelectorString); trimmedLabelSelector != "" {
+		setupLog.Info(fmt.Sprintf("Filtering AcrPullBindings for label key: %s", trimmedLabelSelector))
+		var (
+			labelRequirement *labels.Requirement
+			err              error
+		)
+		if strings.Contains(trimmedLabelSelector, "=") {
+			parts := strings.SplitN(trimmedLabelSelector, "=", 2)
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			labelRequirement, err = labels.NewRequirement(key, selection.Equals, []string{value})
+		} else {
+			labelRequirement, err = labels.NewRequirement(trimmedLabelSelector, selection.Exists, []string{})
+		}
 		if err != nil {
 			setupLog.Error(err, "unable to create label selector for AcrPullBinding")
 			os.Exit(1)
