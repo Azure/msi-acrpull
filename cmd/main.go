@@ -61,7 +61,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&serviceAccountTokenAudience, "service-account-token-audience", "api://AzureCRTokenExchange", "The audience to ask the Kubernetes API server to mint Service Account tokens for, must match Federated Identity Credential configuration in Azure.")
 	flag.Float64Var(&ttlRotationFraction, "ttl-rotation-fraction", 0.5, "The fraction of the pull token's TTL at which the v1beta2 reconciler will refresh the token.")
-	flag.StringVar(&apbLabelSelectorString, "label-selector", "", "Label value to watch for AcrPullBindings")
+	flag.StringVar(&apbLabelSelectorString, "label-selector", "", "Kubernetes label selector used to filter AcrPullBindings (e.g. environment!=prod,tier in (frontend,backend))")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -115,24 +115,12 @@ func main() {
 
 	// Add label selector for both v1beta1 and v1beta2 AcrPullBinding if label is provided
 	if trimmedLabelSelector := strings.TrimSpace(apbLabelSelectorString); trimmedLabelSelector != "" {
-		setupLog.Info(fmt.Sprintf("Filtering AcrPullBindings for label key: %s", trimmedLabelSelector))
-		var (
-			labelRequirement *labels.Requirement
-			err              error
-		)
-		if strings.Contains(trimmedLabelSelector, "=") {
-			parts := strings.SplitN(trimmedLabelSelector, "=", 2)
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			labelRequirement, err = labels.NewRequirement(key, selection.Equals, []string{value})
-		} else {
-			labelRequirement, err = labels.NewRequirement(trimmedLabelSelector, selection.Exists, []string{})
-		}
+		setupLog.Info(fmt.Sprintf("Filtering AcrPullBindings with selector: %s", trimmedLabelSelector))
+		selector, err := labels.Parse(trimmedLabelSelector)
 		if err != nil {
-			setupLog.Error(err, "unable to create label selector for AcrPullBinding")
+			setupLog.Error(err, "unable to parse label selector for AcrPullBinding")
 			os.Exit(1)
 		}
-		selector := labels.NewSelector().Add(*labelRequirement)
 		if cacheOpts.ByObject == nil {
 			cacheOpts.ByObject = make(map[crclient.Object]cache.ByObject)
 		}
