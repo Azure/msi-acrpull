@@ -187,15 +187,9 @@ func acrPullBindingLabelSelector(labelSelectorString string) (labels.Selector, e
 		return nil, nil
 	}
 
-	// Try to parse as a metav1.LabelSelector string
-	labelSelector, err := metav1.ParseToLabelSelector(trimmed)
+	selector, err := labels.Parse(trimmed)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse label selector %q: %w", trimmed, err)
-	}
-	// Convert metav1.LabelSelector to labels.Selector
-	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert label selector %q to selector: %w", trimmed, err)
 	}
 
 	return selector, nil

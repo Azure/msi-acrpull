@@ -27,6 +27,24 @@ either if they are assigned to the VMSS on which the `acrpull` controller is run
 identity federation to service accounts in the namespace. New deployments of `acrpull` should use the latter approach;
 the former remains as a back-stop for users who have not yet migrated.
 
+### Filtering bindings with label selectors
+
+When running the controller you can scope which `AcrPullBinding` objects are reconciled by passing the
+`--label-selector` flag. The value uses the exact [Kubernetes label selector syntax](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors),
+so multiple requirements and operators such as `!=`, `in`, `notin`, and `exists` are supported.
+
+For example, to only reconcile bindings in non-production environments for a particular tier you could run the
+controller with:
+
+```shell
+/manager \
+  --label-selector "environment!=prod,tier in (frontend,backend)"
+```
+
+This selector will match any `AcrPullBinding` that has `tier` set to either `frontend` or `backend` while also ensuring
+that `environment` is not equal to `prod`. Leaving the flag unset causes the controller to reconcile every
+`AcrPullBinding` in the cluster.
+
 ## A note on pull secrets
 
 When `Pod`s are created to fulfill `Deployment`s, `DaemonSet`s, _etc_, `pod.spec.imagePullSecrets` is defaulted from

@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
 	testingclock "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
@@ -834,7 +835,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			referencingServiceAccounts: []corev1.ServiceAccount{
 				{
 					ObjectMeta:       metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
-					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"},{Name: "previous-binding-msi-acrpull-secret"},{Name: "extraneous"}},
+					ImagePullSecrets: []corev1.LocalObjectReference{{Name: "binding-msi-acrpull-secret"}, {Name: "previous-binding-msi-acrpull-secret"}, {Name: "extraneous"}},
 				},
 			},
 			pullSecrets: []corev1.Secret{{
@@ -1399,6 +1400,45 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_acrPullBindingLabelSelector(t *testing.T) {
+	t.Run("empty string returns nil selector", func(t *testing.T) {
+		selector, err := acrPullBindingLabelSelector("   ")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if selector != nil {
+			t.Fatalf("expected nil selector, got %v", selector)
+		}
+	})
+
+	t.Run("supports complex kubernetes expressions", func(t *testing.T) {
+		const rawSelector = "environment!=prod,tier in (frontend,backend)"
+		selector, err := acrPullBindingLabelSelector(rawSelector)
+		if err != nil {
+			t.Fatalf("expected selector to parse, got error %v", err)
+		}
+		if selector == nil {
+			t.Fatal("expected selector, got nil")
+		}
+
+		if !selector.Matches(labels.Set{"environment": "staging", "tier": "frontend"}) {
+			t.Fatal("selector should match staging frontend workload")
+		}
+		if selector.Matches(labels.Set{"environment": "prod", "tier": "frontend"}) {
+			t.Fatal("selector should not match prod workloads due to != predicate")
+		}
+		if selector.Matches(labels.Set{"environment": "staging", "tier": "database"}) {
+			t.Fatal("selector should not match tiers outside the allowed set")
+		}
+	})
+
+	t.Run("invalid selector returns error", func(t *testing.T) {
+		if _, err := acrPullBindingLabelSelector("environment in (prod"); err == nil {
+			t.Fatal("expected error for malformed selector")
+		}
+	})
 }
 
 func TestPullSecretName(t *testing.T) {
