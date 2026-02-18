@@ -69,12 +69,12 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 			},
 			AddFinalizer: func(binding *msiacrpullv1beta1.AcrPullBinding, finalizer string) *msiacrpullv1beta1.AcrPullBinding {
 				updated := binding.DeepCopy()
-				updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, finalizer)
+				updated.Finalizers = append(updated.Finalizers, finalizer)
 				return updated
 			},
 			RemoveFinalizer: func(binding *msiacrpullv1beta1.AcrPullBinding, finalizer string) *msiacrpullv1beta1.AcrPullBinding {
 				updated := binding.DeepCopy()
-				updated.ObjectMeta.Finalizers = slices.DeleteFunc(updated.ObjectMeta.Finalizers, func(s string) bool {
+				updated.Finalizers = slices.DeleteFunc(updated.Finalizers, func(s string) bool {
 					return s == finalizer
 				})
 				return updated
@@ -87,7 +87,7 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				return serviceAccountName
 			},
 			GetPullSecretName: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
-				return legacySecretName(binding.ObjectMeta.Name)
+				return legacySecretName(binding.Name)
 			},
 			GetInputsHash: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
@@ -264,8 +264,8 @@ func indexPullSecretByPullBinding(object client.Object) []string {
 	}
 
 	// while we clean up legacy secrets and add labels to them, we need to handle un-labelled secrets here
-	if isLegacySecretName(pullSecret.ObjectMeta.Name) {
-		return []string{pullBindingNameFromLegacySecret(pullSecret.ObjectMeta.Name)}
+	if isLegacySecretName(pullSecret.Name) {
+		return []string{pullBindingNameFromLegacySecret(pullSecret.Name)}
 	}
 
 	return nil
@@ -281,8 +281,8 @@ func enqueuePullBindingsForPullSecret(_ ctrl.Manager) func(ctx context.Context, 
 		var pullBindingName string
 		if name, labelled := pullSecret.Labels[ACRPullBindingLabel]; labelled {
 			pullBindingName = name
-		} else if isLegacySecretName(pullSecret.ObjectMeta.Name) {
-			pullBindingName = pullBindingNameFromLegacySecret(pullSecret.ObjectMeta.Name)
+		} else if isLegacySecretName(pullSecret.Name) {
+			pullBindingName = pullBindingNameFromLegacySecret(pullSecret.Name)
 		}
 		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: pullSecret.Namespace, Name: pullBindingName}}}
 	}

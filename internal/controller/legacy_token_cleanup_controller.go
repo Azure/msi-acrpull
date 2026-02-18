@@ -79,7 +79,7 @@ func (c *LegacyTokenCleanupController) Reconcile(ctx context.Context, req ctrl.R
 	legacySecret := &corev1.Secret{}
 	if err := c.Client.Get(ctx, types.NamespacedName{
 		Namespace: req.Namespace,
-		Name:      legacySecretName(acrBinding.ObjectMeta.Name),
+		Name:      legacySecretName(acrBinding.Name),
 	}, legacySecret); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get legacy secret")
@@ -173,11 +173,11 @@ func (c *LegacyTokenCleanupController) checkCompletion(ctx context.Context) erro
 func LegacyPullSecretsPresentWithoutLabels(pullBindings msiacrpullv1beta1.AcrPullBindingList, secrets corev1.SecretList) bool {
 	secretNames := sets.Set[string]{}
 	for _, pullBinding := range pullBindings.Items {
-		secretNames.Insert(legacySecretName(pullBinding.ObjectMeta.Name))
+		secretNames.Insert(legacySecretName(pullBinding.Name))
 	}
 
 	return slices.ContainsFunc(secrets.Items, func(secret corev1.Secret) bool {
 		_, labelled := secret.Labels[ACRPullBindingLabel]
-		return secretNames.Has(secret.ObjectMeta.Name) && !labelled
+		return secretNames.Has(secret.Name) && !labelled
 	})
 }

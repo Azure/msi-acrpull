@@ -102,7 +102,7 @@ func (r *genericReconciler[O]) Reconcile(ctx context.Context, req ctrl.Request) 
 		pullSecretNames = append(pullSecretNames, r.GetPullSecretName(acrBinding))
 	} else {
 		for _, pullSecret := range pullSecrets.Items {
-			pullSecretNames = append(pullSecretNames, pullSecret.ObjectMeta.Name)
+			pullSecretNames = append(pullSecretNames, pullSecret.Name)
 		}
 	}
 
@@ -142,7 +142,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	// them are removed from the previous service account
 	pullSecretNames := sets.Set[string]{}
 	for _, pullSecret := range pullSecrets {
-		pullSecretNames.Insert(pullSecret.ObjectMeta.Name)
+		pullSecretNames.Insert(pullSecret.Name)
 	}
 	extraneousServiceAccounts := slices.DeleteFunc(referencingServiceAccounts, func(other corev1.ServiceAccount) bool {
 		return serviceAccount != nil && other.Name == serviceAccount.Name
@@ -210,8 +210,8 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	// clean up references to any extraneous pull secrets that refer to this binding
 	extraneous := sets.Set[string]{}
 	for _, secret := range pullSecrets {
-		if secret.ObjectMeta.Name != expectedPullSecretName {
-			extraneous.Insert(secret.ObjectMeta.Name)
+		if secret.Name != expectedPullSecretName {
+			extraneous.Insert(secret.Name)
 		}
 	}
 	if slices.ContainsFunc(serviceAccount.ImagePullSecrets, func(reference corev1.LocalObjectReference) bool {
@@ -228,7 +228,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 
 	// clean up any extraneous pull secrets that refer to this binding
 	for _, secret := range pullSecrets {
-		if secret.ObjectMeta.Name != expectedPullSecretName {
+		if secret.Name != expectedPullSecretName {
 			deleted := secret.DeepCopy()
 			logger.WithValues("secret", crclient.ObjectKeyFromObject(deleted).String()).Info("cleaning up extraneous pull credential")
 			return &action[O]{deleteSecret: deleted}

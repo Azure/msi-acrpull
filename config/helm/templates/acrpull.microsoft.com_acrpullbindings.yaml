@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.20.1
   name: acrpullbindings.acrpull.microsoft.com
 spec:
   group: acrpull.microsoft.com
@@ -109,7 +109,6 @@ spec:
                       however a list of space-delimited scopes is acceptable.
                       See docs for details: https://distribution.github.io/distribution/spec/auth/scope/
 
-
                       Examples:
                       repository:my-repository:pull,push
                       repository:my-repository:pull repository:other-repository:push,pull
@@ -186,6 +185,8 @@ spec:
                           client and tenant ID must be specified together.
                         example: 72f988bf-86f1-41af-91ab-2d7cd011db47
                         type: string
+                    required:
+                    - serviceAccountRef
                     type: object
                     x-kubernetes-validations:
                     - message: custom client and tenant identifiers must be provided
@@ -201,6 +202,10 @@ spec:
                 description: The name of the service account to associate the image
                   pull secret with.
                 type: string
+            required:
+            - acr
+            - auth
+            - serviceAccountName
             type: object
           status:
             description: AcrPullBindingStatus defines the observed state of AcrPullBinding
