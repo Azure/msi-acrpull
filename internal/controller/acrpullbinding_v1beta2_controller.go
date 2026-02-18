@@ -80,12 +80,12 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 			},
 			AddFinalizer: func(binding *msiacrpullv1beta2.AcrPullBinding, finalizer string) *msiacrpullv1beta2.AcrPullBinding {
 				updated := binding.DeepCopy()
-				updated.ObjectMeta.Finalizers = append(updated.ObjectMeta.Finalizers, finalizer)
+				updated.Finalizers = append(updated.Finalizers, finalizer)
 				return updated
 			},
 			RemoveFinalizer: func(binding *msiacrpullv1beta2.AcrPullBinding, finalizer string) *msiacrpullv1beta2.AcrPullBinding {
 				updated := binding.DeepCopy()
-				updated.ObjectMeta.Finalizers = slices.DeleteFunc(updated.ObjectMeta.Finalizers, func(s string) bool {
+				updated.Finalizers = slices.DeleteFunc(updated.Finalizers, func(s string) bool {
 					return s == finalizer
 				})
 				return updated
@@ -94,7 +94,7 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 				return binding.Spec.ServiceAccountName
 			},
 			GetPullSecretName: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
-				return pullSecretName(binding.ObjectMeta.Name)
+				return pullSecretName(binding.Name)
 			},
 			GetInputsHash: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
 				return inputsHash(binding.Spec)

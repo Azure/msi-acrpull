@@ -28,31 +28,6 @@ rules:
   - create
 - apiGroups:
   - acrpull.microsoft.com
-  resources:
-  - acrpullbindings
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - acrpull.microsoft.com
-  resources:
-  - acrpullbindings/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - acrpull.microsoft.com
-  resources:
-  - acrpullbindings/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - msi-acrpull.microsoft.com
   resources:
   - acrpullbindings
@@ -65,12 +40,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - acrpull.microsoft.com
   - msi-acrpull.microsoft.com
   resources:
   - acrpullbindings/finalizers
   verbs:
   - update
 - apiGroups:
+  - acrpull.microsoft.com
   - msi-acrpull.microsoft.com
   resources:
   - acrpullbindings/status
