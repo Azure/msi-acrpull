@@ -36,7 +36,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2024-06-02-preview' = {
     }
   }
   properties: {
-    kubernetesVersion: '1.31.13'
+    kubernetesVersion: '1.34'
     securityProfile: {
       workloadIdentity: {
         enabled: true

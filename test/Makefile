@@ -1,7 +1,7 @@
 include ./../.bingo/Variables.mk
 
 UNIQUE_INPUT ?= ${USER}-test-dev
-LOCATION ?= WestUS2
+LOCATION ?= EastUS2
 
 _output:
 	mkdir _output
