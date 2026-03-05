@@ -9,6 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/go-logr/logr"
 
 	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 )
@@ -31,7 +32,7 @@ func AcquireARMToken(ctx context.Context, id azidentity.ManagedIDKind) (azcore.A
 	return cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{customARMResource}})
 }
 
-func ARMTokenForBinding(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
+func ARMTokenForBinding(ctx context.Context, logger logr.Logger, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
 	env := environment(spec.ACR.Environment, spec.ACR.CloudConfig)
 
 	var credential azcore.TokenCredential
@@ -41,11 +42,16 @@ func ARMTokenForBinding(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindi
 		var id azidentity.ManagedIDKind
 		if spec.Auth.ManagedIdentity.ClientID != "" {
 			id = azidentity.ClientID(spec.Auth.ManagedIdentity.ClientID)
+			logger.Info("Attempting token exchange through IMDS using managed identity", "clientID", spec.Auth.ManagedIdentity.ClientID)
 		} else if spec.Auth.ManagedIdentity.ResourceID != "" {
 			id = azidentity.ResourceID(spec.Auth.ManagedIdentity.ResourceID)
+			logger.Info("Attempting token exchange through IMDS using managed identity", "resourceID", spec.Auth.ManagedIdentity.ResourceID)
+		} else {
+			logger.Info("Attempting token exchange through IMDS using system-assigned managed identity")
 		}
 		credential, err = azidentity.NewManagedIdentityCredential(&azidentity.ManagedIdentityCredentialOptions{ID: id})
 	case spec.Auth.WorkloadIdentity != nil:
+		logger.Info("Attempting token exchange using workload identity", "tenantID", tenantId, "clientID", clientId)
 		// n.b. the built-in azidentity.WorkloadIdentityCredential assumes we're loading a service account token
 		// from a file in a Pod, where the Kubernetes API server is rotating it, etc. Unfortunately that is not
 		// our use-case here, and we certainly don't want to centralize every service account token we ever mint
