@@ -8,6 +8,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: e2e-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   msi_acrpull_e2e:
     env:
