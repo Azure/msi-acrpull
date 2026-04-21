@@ -6,27 +6,39 @@ LOCATION ?= WestUS2
 _output:
 	mkdir _output
 
-_output/tenant: _output/
+_output/tenant: | _output
 	az account show --query tenantId --output tsv > $@
 
-_output/deployment: _output
+_output/deployment: | _output
 	echo -n "$(UNIQUE_INPUT)" | sha256sum | awk '{print $$1}' > _output/deployment
 
 _output/infrastructure.json: _output/deployment
 	az deployment sub create --name "$(shell cat _output/deployment )" --location "$(LOCATION)" --template-file "./infrastructure/resourceGroup.bicep" --parameters "location=$(LOCATION)" --parameters "uniqueIdentifier=$(UNIQUE_INPUT)" --output "json" > _output/infrastructure.json
 
-_output/identity.json: _output
+_output/identity.json: | _output
 	az deployment sub create --name msi-acrpull-e2e-test-runner --template-file "./infrastructure/identity.resourceGroup.bicep" --parameters "location=$(LOCATION)" --output json --location "$(LOCATION)" > _output/identity.json
 
 .PHONY: cleanup-resource-group
 cleanup-resource-group:
-	test -f _output/infrastructure.json && az group delete --yes --name "$(shell jq --raw-output '.properties.outputs.resourceGroup.value' < _output/infrastructure.json )"
-	rm _output/infrastructure.json
+	@if test -f _output/infrastructure.json; then \
+	  rg=$$(jq --raw-output '.properties.outputs.resourceGroup.value' < _output/infrastructure.json 2>/dev/null); \
+	  if [ -n "$$rg" ] && [ "$$rg" != "null" ]; then \
+	    az group delete --yes --name "$$rg"; \
+	  else \
+	    echo "WARNING: could not extract resource group from _output/infrastructure.json, skipping delete"; \
+	  fi; \
+	fi
+	rm -f _output/infrastructure.json
 
 .PHONY: cleanup-deployment
 cleanup-deployment:
-	test -f _output/deployment && az deployment sub delete --name "$(shell cat _output/deployment )"
-	rm _output/deployment
+	@if test -f _output/deployment; then \
+	  name=$$(cat _output/deployment); \
+	  if [ -n "$$name" ]; then \
+	    az deployment sub delete --name "$$name"; \
+	  fi; \
+	fi
+	rm -f _output/deployment
 
 .PHONY: cleanup
 cleanup: cleanup-resource-group cleanup-deployment
@@ -82,7 +94,7 @@ _output/assets/0alertmanagerConfigCustomResourceDefinition.yaml _output/assets/0
 	mkdir -p $(dir $@)
 	wget --quiet --output-document=$@ https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/main/manifests/setup/$(notdir $@)
 
-_output/deploy: _output
+_output/deploy: | _output
 	mkdir -p _output/deploy
 
 _output/deploy/prometheus-crds: _output/deploy prometheus-crds _output/aks.kubeconfig
