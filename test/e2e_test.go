@@ -105,6 +105,8 @@ func TestManagedIdentityPulls(t *testing.T) {
 				})
 			}
 
+			eventuallyServiceAccountExists(t, ctx, client, namespace, "default")
+
 			const pod = "fail"
 			t.Logf("creating pod without service account %s/%s", namespace, pod)
 			if err := client.Create(ctx, &corev1.Pod{
