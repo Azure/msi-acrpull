@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
+	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -1559,7 +1560,7 @@ func noopTokenStub() func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1
 	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
 		return func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error) {
 				return nil, errors.New("unexpected call to SA token request")
-			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
+			}, func(ctx context.Context, logger logr.Logger, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
 				return azcore.AccessToken{}, errors.New("unexpected call to ARM token request")
 			}, func(ctx context.Context, armToken azcore.AccessToken, spec msiacrpullv1beta2.AcrConfiguration) (azcore.AccessToken, error) {
 				return azcore.AccessToken{}, errors.New("unexpected call to ARM ACR token exchange")
@@ -1571,7 +1572,7 @@ func managedIdentityValidatingTokenStub(output azcore.AccessToken, outputError e
 	return func(t *testing.T, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger) {
 		return func(ctx context.Context, serviceAccountNamespace, serviceAccountName string) (*authenticationv1.TokenRequest, error) {
 				return nil, errors.New("unexpected call to SA token request for managed identity")
-			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
+			}, func(ctx context.Context, logger logr.Logger, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
 				assert.Empty(t, cmp.Diff(spec, binding.Spec), "arm token request binding spec mismatch")
 				assert.Empty(t, serviceAccount.Annotations["azure.workload.identity/tenant-id"], "arm token request unexpected tenant id")
 				assert.Empty(t, serviceAccount.Annotations["azure.workload.identity/client-id"], "arm token request unexpected client id")
@@ -1597,7 +1598,7 @@ func workloadIdentityValidatingTokenStub(output azcore.AccessToken, outputError 
 						Token: "fake-sa-token",
 					},
 				}, nil
-			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
+			}, func(ctx context.Context, logger logr.Logger, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
 				assert.Empty(t, cmp.Diff(spec, binding.Spec), "arm token request binding spec mismatch")
 				assert.Equal(t, serviceAccount.Annotations["azure.workload.identity/tenant-id"], tenantId, "arm token request tenant id mismatch")
 				assert.Equal(t, serviceAccount.Annotations["azure.workload.identity/client-id"], clientId, "arm token request client id mismatch")
@@ -1623,7 +1624,7 @@ func workloadIdentityLiteralValidatingTokenStub(output azcore.AccessToken, outpu
 						Token: "fake-sa-token",
 					},
 				}, nil
-			}, func(ctx context.Context, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
+			}, func(ctx context.Context, logger logr.Logger, spec msiacrpullv1beta2.AcrPullBindingSpec, tenantId, clientId, serviceAccountToken string) (azcore.AccessToken, error) {
 				assert.Empty(t, cmp.Diff(spec, binding.Spec), "arm token request binding spec mismatch")
 				assert.Equal(t, spec.Auth.WorkloadIdentity.TenantID, tenantId, "arm token request tenant id mismatch")
 				assert.Equal(t, spec.Auth.WorkloadIdentity.ClientID, clientId, "arm token request client id mismatch")
