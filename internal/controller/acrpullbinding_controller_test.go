@@ -178,6 +178,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 		serviceAccount             *corev1.ServiceAccount
 		pullSecrets                []corev1.Secret
 		referencingServiceAccounts []corev1.ServiceAccount
+		allowedACRServerSuffixes   []string
 
 		registerTokenCall func(*mock_authorizer.MockInterface)
 
@@ -296,6 +297,38 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 					},
 					Status: msiacrpullv1beta1.AcrPullBindingStatus{
 						Error: `failed to retrieve ACR access token: oops`,
+					},
+				},
+			},
+		},
+		{
+			name: "disallowed ACR server fails before token acquisition",
+			acrBinding: &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
+				Spec: msiacrpullv1beta1.AcrPullBindingSpec{
+					ServiceAccountName:        "delegate",
+					AcrServer:                 "attacker.example.com",
+					Scope:                     "repository:testing:pull,push",
+					ManagedIdentityClientID:   "client-id",
+					ManagedIdentityResourceID: "resource-id",
+				},
+			},
+			serviceAccount: &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
+			},
+			allowedACRServerSuffixes: []string{"azurecr.io"},
+			output: &action[*msiacrpullv1beta1.AcrPullBinding]{
+				updatePullBindingStatus: &msiacrpullv1beta1.AcrPullBinding{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
+					Spec: msiacrpullv1beta1.AcrPullBindingSpec{
+						ServiceAccountName:        "delegate",
+						AcrServer:                 "attacker.example.com",
+						Scope:                     "repository:testing:pull,push",
+						ManagedIdentityClientID:   "client-id",
+						ManagedIdentityResourceID: "resource-id",
+					},
+					Status: msiacrpullv1beta1.AcrPullBindingStatus{
+						Error: `ACR server "attacker.example.com" is not in the allowed ACR server suffixes: azurecr.io`,
 					},
 				},
 			},
@@ -1392,6 +1425,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 				Auth:                             fakeAuth,
 				DefaultManagedIdentityResourceID: defaultManagedIdentityResourceID,
 				DefaultACRServer:                 defaultACRServer,
+				AllowedACRServerSuffixes:         testCase.allowedACRServerSuffixes,
 			})
 
 			output := controller.reconcile(context.Background(), logger, testCase.acrBinding, testCase.serviceAccount, testCase.pullSecrets, testCase.referencingServiceAccounts)
