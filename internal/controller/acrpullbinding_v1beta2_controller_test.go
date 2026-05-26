@@ -49,6 +49,7 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 		serviceAccount             *corev1.ServiceAccount
 		pullSecrets                []corev1.Secret
 		referencingServiceAccounts []corev1.ServiceAccount
+		allowedACRServerSuffixes   []string
 
 		tokenStub func(*testing.T, *msiacrpullv1beta2.AcrPullBinding, *corev1.ServiceAccount) (ServiceAccountTokenMinter, armTokenFetcher, armAcrTokenExchanger)
 
@@ -393,6 +394,50 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 					},
 					Status: msiacrpullv1beta2.AcrPullBindingStatus{
 						Error: `failed to retrieve ARM token: oops`,
+					},
+				},
+			},
+		},
+		{
+			name: "disallowed ACR server fails before token acquisition",
+			acrBinding: &msiacrpullv1beta2.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
+				Spec: msiacrpullv1beta2.AcrPullBindingSpec{
+					ServiceAccountName: "delegate",
+					ACR: msiacrpullv1beta2.AcrConfiguration{
+						Server:      "attacker.example.com",
+						Scope:       "repository:testing:pull,push",
+						Environment: msiacrpullv1beta2.AzureEnvironmentPublicCloud,
+					},
+					Auth: msiacrpullv1beta2.AuthenticationMethod{
+						ManagedIdentity: &msiacrpullv1beta2.ManagedIdentityAuth{
+							ClientID: "client-id",
+						},
+					},
+				},
+			},
+			serviceAccount: &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "delegate"},
+			},
+			allowedACRServerSuffixes: []string{"azurecr.io"},
+			output: &action[*msiacrpullv1beta2.AcrPullBinding]{
+				updatePullBindingStatus: &msiacrpullv1beta2.AcrPullBinding{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "binding", Finalizers: []string{"msi-acrpull.microsoft.com"}},
+					Spec: msiacrpullv1beta2.AcrPullBindingSpec{
+						ServiceAccountName: "delegate",
+						ACR: msiacrpullv1beta2.AcrConfiguration{
+							Server:      "attacker.example.com",
+							Scope:       "repository:testing:pull,push",
+							Environment: msiacrpullv1beta2.AzureEnvironmentPublicCloud,
+						},
+						Auth: msiacrpullv1beta2.AuthenticationMethod{
+							ManagedIdentity: &msiacrpullv1beta2.ManagedIdentityAuth{
+								ClientID: "client-id",
+							},
+						},
+					},
+					Status: msiacrpullv1beta2.AcrPullBindingStatus{
+						Error: `ACR server "attacker.example.com" is not in the allowed ACR server suffixes: azurecr.io`,
 					},
 				},
 			},
@@ -1545,6 +1590,7 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 				fetchArmToken:               fetchArmToken,
 				exchangeArmTokenForAcrToken: exchangeArmTokenForAcrToken,
 				TTLRotationFraction:         0.5,
+				AllowedACRServerSuffixes:    testCase.allowedACRServerSuffixes,
 			})
 
 			output := controller.reconcile(context.Background(), logger, testCase.acrBinding, testCase.serviceAccount, testCase.pullSecrets, testCase.referencingServiceAccounts)

@@ -52,6 +52,7 @@ type V1beta1ReconcilerOpts struct {
 	DefaultManagedIdentityClientID   string
 	DefaultACRServer                 string
 	PullBindingLabelSelectorString   string
+	AllowedACRServerSuffixes         []string
 }
 
 func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler {
@@ -92,6 +93,10 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 			GetInputsHash: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
 				return base36sha224([]byte(msiClientID + msiResourceID + acrServer + binding.Spec.Scope))
+			},
+			ValidateBinding: func(binding *msiacrpullv1beta1.AcrPullBinding) error {
+				_, _, acrServer := specOrDefault(opts, binding.Spec)
+				return validateACRServerSuffix(acrServer, opts.AllowedACRServerSuffixes)
 			},
 			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta1.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)

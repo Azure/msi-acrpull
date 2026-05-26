@@ -45,6 +45,13 @@ This selector will match any `AcrPullBinding` that has `tier` set to either `fro
 that `environment` is not equal to `prod`. Leaving the flag unset causes the controller to reconcile every
 `AcrPullBinding` in the cluster.
 
+### Restricting ACR server domains
+
+The controller restricts which registry domains it will exchange Azure tokens with by using a configured list of domain
+suffixes. Each suffix matches the exact domain or any subdomain. The Helm chart defaults this value to `azurecr.io` for
+public Azure Container Registry deployments. Operators deploying to sovereign clouds should configure
+`allowedACRServerSuffixes` with the appropriate registry suffixes for their environment.
+
 ## A note on pull secrets
 
 When `Pod`s are created to fulfill `Deployment`s, `DaemonSet`s, _etc_, `pod.spec.imagePullSecrets` is defaulted from

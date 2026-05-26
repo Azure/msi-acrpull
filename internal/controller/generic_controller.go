@@ -34,6 +34,7 @@ type genericReconciler[O pullBinding] struct {
 	GetServiceAccountName func(O) string
 	GetPullSecretName     func(O) string
 	GetInputsHash         func(O) string
+	ValidateBinding       func(O) error
 
 	CreatePullCredential func(context.Context, O, *corev1.ServiceAccount) (string, time.Time, error)
 
@@ -134,6 +135,13 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	} else {
 		// the object is being deleted, do cleanup as necessary
 		return r.cleanUp(acrBinding, serviceAccount, pullSecrets, logger)
+	}
+
+	if r.ValidateBinding != nil {
+		if err := r.ValidateBinding(acrBinding); err != nil {
+			logger.Info(err.Error())
+			return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error())}
+		}
 	}
 
 	// if the user changed which service account should be bound to this credential, we need to
