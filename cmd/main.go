@@ -54,6 +54,7 @@ func main() {
 	var serviceAccountTokenAudience string
 	var ttlRotationFraction float64
 	var apbLabelSelectorString string
+	var allowedACRServerSuffixesString string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -62,11 +63,13 @@ func main() {
 	flag.StringVar(&serviceAccountTokenAudience, "service-account-token-audience", "api://AzureCRTokenExchange", "The audience to ask the Kubernetes API server to mint Service Account tokens for, must match Federated Identity Credential configuration in Azure.")
 	flag.Float64Var(&ttlRotationFraction, "ttl-rotation-fraction", 0.5, "The fraction of the pull token's TTL at which the v1beta2 reconciler will refresh the token.")
 	flag.StringVar(&apbLabelSelectorString, "label-selector", "", "Kubernetes label selector used to filter AcrPullBindings (e.g. environment!=prod,tier in (frontend,backend))")
+	flag.StringVar(&allowedACRServerSuffixesString, "allowed-acr-server-suffixes", "", "Comma-separated list of ACR server domain suffixes the controller may exchange tokens with. If empty, no ACR server suffix validation is performed.")
 	opts := zap.Options{
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	allowedACRServerSuffixes := commaSeparatedValues(allowedACRServerSuffixesString)
 	defaultACRServer := os.Getenv(defaultACRServerEnvKey)
 	defaultManagedIdentityResourceID := os.Getenv(defaultManagedIdentityResourceIDEnvKey)
 	defaultManagedIdentityClientID := os.Getenv(defaultManagedIdentityClientIDEnvKey)
@@ -151,6 +154,7 @@ func main() {
 		DefaultManagedIdentityClientID:   defaultManagedIdentityClientID,
 		DefaultACRServer:                 defaultACRServer,
 		PullBindingLabelSelectorString:   apbLabelSelectorString,
+		AllowedACRServerSuffixes:         allowedACRServerSuffixes,
 	})
 	if err := apbReconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBinding")
@@ -172,6 +176,7 @@ func main() {
 		ServiceAccountTokenAudience:    serviceAccountTokenAudience,
 		ServiceAccountClient:           kubeClient.CoreV1(),
 		PullBindingLabelSelectorString: apbLabelSelectorString,
+		AllowedACRServerSuffixes:       allowedACRServerSuffixes,
 	})
 	if err := v1beta2Reconciler.SetupWithManager(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "AcrPullBindingV1beta2")
@@ -205,4 +210,15 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func commaSeparatedValues(value string) []string {
+	var values []string
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			values = append(values, item)
+		}
+	}
+	return values
 }

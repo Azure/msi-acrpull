@@ -5,3 +5,5 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 ttlRotationFraction: 0.5
+allowedACRServerSuffixes:
+  - azurecr.io
