@@ -43,6 +43,7 @@ type V1beta2ReconcilerOpts struct {
 	ServiceAccountClient           corev1client.ServiceAccountsGetter
 	ServiceAccountTokenAudience    string
 	PullBindingLabelSelectorString string
+	AllowedACRServerSuffixes       []string
 
 	// exposed here to allow unit tests to over-write them
 	mintToken                   ServiceAccountTokenMinter
@@ -98,6 +99,9 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 			},
 			GetInputsHash: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
 				return inputsHash(binding.Spec)
+			},
+			ValidateBinding: func(binding *msiacrpullv1beta2.AcrPullBinding) error {
+				return validateACRServerSuffix(binding.Spec.ACR.Server, opts.AllowedACRServerSuffixes)
 			},
 			CreatePullCredential: func(ctx context.Context, binding *msiacrpullv1beta2.AcrPullBinding, serviceAccount *corev1.ServiceAccount) (string, time.Time, error) {
 				var tenantId, clientId, token string
