@@ -47,16 +47,16 @@ help: ## Display this help.
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=acrpull-controller crd paths="./..." output:dir=config/helm/templates output:crd:artifacts:config=config/helm/templates
+	$(shell cygpath -u "$(GOBIN)/controller-gen-v0.14.0") rbac:roleName=acrpull-controller crd paths="./api/v1beta1" paths="./api/v1beta2" paths="./internal/controller" output:dir=config/helm/templates output:crd:artifacts:config=config/helm/templates
 	mv config/helm/templates/role.yaml config/helm/templates/controller_role.yaml
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) mocks ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(shell cygpath -u "$(GOBIN)/controller-gen-v0.14.0") object:headerFile="hack/boilerplate.go.txt" paths="./api/v1beta1" paths="./api/v1beta2"
 
 .PHONY: mocks
-mocks: $(MOCKGEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(MOCKGEN) -source=pkg/authorizer/interfaces.go > pkg/authorizer/mock_authorizer/interfaces.go
+mocks:  ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(shell cygpath -u "$(GOBIN)/mockgen") -source=pkg/authorizer/interfaces.go > pkg/authorizer/mock_authorizer/interfaces.go
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
