@@ -5,5 +5,7 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 ttlRotationFraction: 0.5
+kubeAPIQPS: 20
+kubeAPIBurst: 30
 allowedACRServerSuffixes:
   - azurecr.io

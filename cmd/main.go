@@ -54,6 +54,8 @@ func main() {
 	var serviceAccountTokenAudience string
 	var ttlRotationFraction float64
 	var apbLabelSelectorString string
+	var kubeAPIQPS float64
+	var kubeAPIBurst int
 	var allowedACRServerSuffixesFlag commaSeparatedStringSlice
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -63,6 +65,8 @@ func main() {
 	flag.StringVar(&serviceAccountTokenAudience, "service-account-token-audience", "api://AzureCRTokenExchange", "The audience to ask the Kubernetes API server to mint Service Account tokens for, must match Federated Identity Credential configuration in Azure.")
 	flag.Float64Var(&ttlRotationFraction, "ttl-rotation-fraction", 0.5, "The fraction of the pull token's TTL at which the v1beta2 reconciler will refresh the token.")
 	flag.StringVar(&apbLabelSelectorString, "label-selector", "", "Kubernetes label selector used to filter AcrPullBindings (e.g. environment!=prod,tier in (frontend,backend))")
+	flag.Float64Var(&kubeAPIQPS, "kube-api-qps", 20.0, "QPS to use while talking with the Kubernetes API server.")
+	flag.IntVar(&kubeAPIBurst, "kube-api-burst", 30, "Burst to use while talking with the Kubernetes API server.")
 	flag.Var(&allowedACRServerSuffixesFlag, "allowed-acr-server-suffixes", "Comma-separated list of ACR server domain suffixes the controller may exchange tokens with. May be specified multiple times. If empty, no ACR server suffix validation is performed.")
 	opts := zap.Options{
 		Development: true,
@@ -76,6 +80,8 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	cfg := ctrl.GetConfigOrDie()
+	cfg.QPS = float32(kubeAPIQPS)
+	cfg.Burst = kubeAPIBurst
 	ctx := ctrl.SetupSignalHandler()
 	client, err := crclient.New(cfg, crclient.Options{Scheme: scheme})
 	if err != nil {
