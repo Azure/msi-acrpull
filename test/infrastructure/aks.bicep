@@ -22,7 +22,7 @@ resource controlPlaneAssignment 'Microsoft.Authorization/roleAssignments@2022-04
   }
 }
 
-resource aks 'Microsoft.ContainerService/managedClusters@2024-06-02-preview' = {
+resource aks 'Microsoft.ContainerService/managedClusters@2024-06-01' = {
   name: guid(uniqueIdentifier, 'aks')
   location: location
   sku: {
