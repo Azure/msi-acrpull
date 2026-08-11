@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -188,8 +189,14 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 
 		dockerConfig, expiresOn, err := r.CreatePullCredential(ctx, acrBinding, serviceAccount)
 		if err != nil {
-			logger.Info(err.Error())
-			return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error())}
+			logger.Error(err, "failed to generate pull credential")
+			action := &action[O]{
+				updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error()),
+			}
+			if !isPermanentCredentialError(err) {
+				action.retryError = err.Error()
+			}
+			return action
 		}
 
 		newSecret := newPullSecret(acrBinding, r.GetPullSecretName(acrBinding), dockerConfig, r.Scheme, expiresOn, r.now, inputHash)
@@ -199,7 +206,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 			return &action[O]{createSecret: newSecret}
 		} else {
 			logger.Info("updating pull credential secret")
-			return &action[O]{updateSecret: newSecret}
+			return &action[O]{updateSecret: pullSecretForUpdate(pullSecret, newSecret)}
 		}
 	}
 
@@ -391,7 +398,13 @@ func (a *action[O]) execute(ctx context.Context, logger logr.Logger, client crcl
 	} else if a.updatePullBindingStatus != nil {
 		after := clampRequeue(refresh(a.updatePullBindingStatus))
 		logger.WithValues("requeueAfter", after).Info("re-queueing for later processing")
-		return ctrl.Result{RequeueAfter: after}, client.Status().Update(ctx, a.updatePullBindingStatus)
+		if err := client.Status().Update(ctx, a.updatePullBindingStatus); err != nil {
+			return ctrl.Result{}, err
+		}
+		if a.retryError != "" {
+			return ctrl.Result{}, fmt.Errorf("retrying after credential generation failure: %s", a.retryError)
+		}
+		return ctrl.Result{RequeueAfter: after}, nil
 	} else if a.createSecret != nil {
 		return ctrl.Result{}, client.Create(ctx, a.createSecret)
 	} else if a.updateSecret != nil {
@@ -425,11 +438,21 @@ type pullBinding interface {
 	crclient.Object
 }
 
+type permanentCredentialError struct {
+	error
+}
+
+func isPermanentCredentialError(err error) bool {
+	var permanent permanentCredentialError
+	return errors.As(err, &permanent)
+}
+
 // action captures the outcome of a reconciliation pass using static data, to aid in testing the reconciliation loop
 type action[O pullBinding] struct {
 	updatePullBinding       O
 	noop                    O
 	updatePullBindingStatus O
+	retryError              string
 
 	createSecret *corev1.Secret
 	updateSecret *corev1.Secret
@@ -439,6 +462,9 @@ type action[O pullBinding] struct {
 }
 
 func (a *action[O]) validate() {
+	if a.retryError != "" && a.updatePullBindingStatus == nil {
+		panic("programmer error: retry error specified without a status update")
+	}
 	var present int
 	if a.updatePullBinding != nil {
 		present++

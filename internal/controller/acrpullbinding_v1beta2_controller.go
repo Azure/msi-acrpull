@@ -119,7 +119,7 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 						} {
 							value, set := serviceAccount.Annotations[annotation.value]
 							if !set {
-								return "", time.Time{}, fmt.Errorf("service account %s missing %s annotation", serviceAccount.Name, annotation.value)
+								return "", time.Time{}, permanentCredentialError{fmt.Errorf("service account %s missing %s annotation", serviceAccount.Name, annotation.value)}
 							}
 							*annotation.into = value
 						}

@@ -379,3 +379,23 @@ func newPullSecret(acrBinding client.Object,
 
 	return pullSecret
 }
+
+func pullSecretForUpdate(existing, desired *corev1.Secret) *corev1.Secret {
+	updated := existing.DeepCopy()
+	updated.Type = desired.Type
+	updated.Data = desired.Data
+
+	if updated.Labels == nil {
+		updated.Labels = map[string]string{}
+	}
+	updated.Labels[ACRPullBindingLabel] = desired.Labels[ACRPullBindingLabel]
+
+	if updated.Annotations == nil {
+		updated.Annotations = map[string]string{}
+	}
+	for _, annotation := range []string{tokenExpiryAnnotation, tokenRefreshAnnotation, tokenInputsAnnotation} {
+		updated.Annotations[annotation] = desired.Annotations[annotation]
+	}
+
+	return updated
+}

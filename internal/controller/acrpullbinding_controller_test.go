@@ -299,6 +299,7 @@ func Test_ACRPullBindingController_reconcile(t *testing.T) {
 						Error: `failed to retrieve ACR access token: oops`,
 					},
 				},
+				retryError: `failed to retrieve ACR access token: oops`,
 			},
 		},
 		{

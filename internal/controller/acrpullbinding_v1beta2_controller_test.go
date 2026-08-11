@@ -396,6 +396,7 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 						Error: `failed to retrieve ARM token: oops`,
 					},
 				},
+				retryError: `failed to retrieve ARM token: oops`,
 			},
 		},
 		{
