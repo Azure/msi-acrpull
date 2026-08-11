@@ -112,6 +112,9 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 
 				return dockerConfig, acrAccessToken.ExpiresOn, nil
 			},
+			GetStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
+				return binding.Status.Error
+			},
 			UpdateStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding, s string) *msiacrpullv1beta1.AcrPullBinding {
 				updated := binding.DeepCopy()
 				updated.Status.Error = s

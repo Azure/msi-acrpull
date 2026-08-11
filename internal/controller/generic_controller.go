@@ -39,6 +39,7 @@ type genericReconciler[O pullBinding] struct {
 
 	CreatePullCredential func(context.Context, O, *corev1.ServiceAccount) (string, time.Time, error)
 
+	GetStatusError    func(O) string
 	UpdateStatusError func(O, string) O
 
 	NeedsRefresh func(logr.Logger, *corev1.Secret, func() time.Time) bool
@@ -141,7 +142,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	if r.ValidateBinding != nil {
 		if err := r.ValidateBinding(acrBinding); err != nil {
 			logger.Info(err.Error())
-			return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error())}
+			return r.statusErrorAction(acrBinding, err.Error(), false)
 		}
 	}
 
@@ -170,7 +171,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	if serviceAccount == nil {
 		err := fmt.Sprintf("service account %q not found", r.GetServiceAccountName(acrBinding))
 		logger.Info(err)
-		return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err)}
+		return r.statusErrorAction(acrBinding, err, false)
 	}
 
 	expectedPullSecretName := r.GetPullSecretName(acrBinding)
@@ -190,13 +191,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		dockerConfig, expiresOn, err := r.CreatePullCredential(ctx, acrBinding, serviceAccount)
 		if err != nil {
 			logger.Error(err, "failed to generate pull credential")
-			action := &action[O]{
-				updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error()),
-			}
-			if !isPermanentCredentialError(err) {
-				action.retryError = err.Error()
-			}
-			return action
+			return r.statusErrorAction(acrBinding, err.Error(), !isPermanentCredentialError(err))
 		}
 
 		newSecret := newPullSecret(acrBinding, r.GetPullSecretName(acrBinding), dockerConfig, r.Scheme, expiresOn, r.now, inputHash)
@@ -251,6 +246,21 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	}
 
 	return r.setSuccessStatus(logger, acrBinding, pullSecret)
+}
+
+func (r *genericReconciler[O]) statusErrorAction(acrBinding O, message string, retry bool) *action[O] {
+	if r.GetStatusError(acrBinding) == message {
+		if retry {
+			return &action[O]{retryError: message}
+		}
+		return nil
+	}
+
+	action := &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, message)}
+	if retry {
+		action.retryError = message
+	}
+	return action
 }
 
 // sortPullSecrets ensures the semantically-correct ordering of pull secrets for the service account. The order of pull
@@ -414,6 +424,9 @@ func (a *action[O]) execute(ctx context.Context, logger logr.Logger, client crcl
 	} else if a.updateServiceAccount != nil {
 		return ctrl.Result{}, client.Update(ctx, a.updateServiceAccount)
 	}
+	if a.retryError != "" {
+		return ctrl.Result{}, fmt.Errorf("retrying after credential generation failure: %s", a.retryError)
+	}
 	logger.Info("no action taken")
 	return ctrl.Result{}, nil
 }
@@ -462,9 +475,6 @@ type action[O pullBinding] struct {
 }
 
 func (a *action[O]) validate() {
-	if a.retryError != "" && a.updatePullBindingStatus == nil {
-		panic("programmer error: retry error specified without a status update")
-	}
 	var present int
 	if a.updatePullBinding != nil {
 		present++

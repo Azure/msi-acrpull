@@ -151,6 +151,47 @@ func TestActionExecutePersistsStatusAndReturnsTransientError(t *testing.T) {
 	}
 }
 
+func TestActionExecuteReturnsTransientErrorWithoutStatusUpdate(t *testing.T) {
+	client := &recordingClient{statusWriter: &recordingStatusWriter{}}
+	result, err := (&action[*msiacrpullv1beta1.AcrPullBinding]{
+		retryError: "temporary Azure outage",
+	}).execute(
+		context.Background(),
+		logr.Discard(),
+		client,
+		func(*msiacrpullv1beta1.AcrPullBinding) time.Duration { return 0 },
+	)
+	if err == nil || !strings.Contains(err.Error(), "temporary Azure outage") {
+		t.Fatalf("expected transient reconcile error, got %v", err)
+	}
+	if !result.IsZero() {
+		t.Fatalf("expected controller-runtime to determine backoff, got %#v", result)
+	}
+	if client.statusWriter.updated != nil {
+		t.Fatalf("expected no status update, got %T", client.statusWriter.updated)
+	}
+}
+
+func TestStatusErrorActionSkipsUnchangedStatus(t *testing.T) {
+	binding := &msiacrpullv1beta1.AcrPullBinding{
+		Status: msiacrpullv1beta1.AcrPullBindingStatus{Error: "temporary Azure outage"},
+	}
+	reconciler := &genericReconciler[*msiacrpullv1beta1.AcrPullBinding]{
+		GetStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
+			return binding.Status.Error
+		},
+		UpdateStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding, message string) *msiacrpullv1beta1.AcrPullBinding {
+			t.Fatal("unchanged status should not be updated")
+			return nil
+		},
+	}
+
+	action := reconciler.statusErrorAction(binding, binding.Status.Error, true)
+	if action.updatePullBindingStatus != nil || action.retryError != binding.Status.Error {
+		t.Fatalf("expected retry without status update, got %#v", action)
+	}
+}
+
 type recordingClient struct {
 	crclient.Client
 	updated      crclient.Object
