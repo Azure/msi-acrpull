@@ -22,15 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           egress-policy: audit
       - name: Checkout
-        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Set up Golang
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.0"
           check-latest: true
@@ -38,14 +38,14 @@ jobs:
         run: |
           echo "Azure CLI Current installed version"
           az version
-      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Setup infrastructure
         run: make -C test/ _output/infrastructure.json _output/aks.kubeconfig _output/deploy/prometheus-crds _output/system-vmss-puller.json _output/tenant "UNIQUE_INPUT=${UNIQUE_INPUT}"
-      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         name: Refresh Azure login before ACR build
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -53,7 +53,7 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Build and push controller image
         run: make -C test/ _output/image.json "UNIQUE_INPUT=${UNIQUE_INPUT}"
-      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         name: Refresh Azure login before test image imports
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -62,7 +62,7 @@ jobs:
         # Refresh OIDC assertion so ACR commands in test targets succeed
       - name: E2E test
         run: make -C test/ test "UNIQUE_INPUT=${UNIQUE_INPUT}"
-      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
         name: Refresh Azure login before cleanup
         if: ${{ always() }}
         with:
