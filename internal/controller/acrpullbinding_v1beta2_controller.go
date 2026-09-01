@@ -118,8 +118,8 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 							{value: azworkloadidentity.TenantIDAnnotation, into: &tenantId},
 						} {
 							value, set := serviceAccount.Annotations[annotation.value]
-							if !set {
-								return "", time.Time{}, fmt.Errorf("service account %s missing %s annotation", serviceAccount.Name, annotation.value)
+							if !set || value == "" {
+								return "", time.Time{}, permanentCredentialError{fmt.Errorf("service account %s missing %s annotation", serviceAccount.Name, annotation.value)}
 							}
 							*annotation.into = value
 						}
@@ -147,6 +147,9 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 					return "", time.Time{}, fmt.Errorf("failed to write ACR dockercfg: %v", err)
 				}
 				return dockerConfig, acrToken.ExpiresOn, nil
+			},
+			GetStatusError: func(binding *msiacrpullv1beta2.AcrPullBinding) string {
+				return binding.Status.Error
 			},
 			UpdateStatusError: func(binding *msiacrpullv1beta2.AcrPullBinding, s string) *msiacrpullv1beta2.AcrPullBinding {
 				updated := binding.DeepCopy()

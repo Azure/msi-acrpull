@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -38,6 +39,7 @@ type genericReconciler[O pullBinding] struct {
 
 	CreatePullCredential func(context.Context, O, *corev1.ServiceAccount) (string, time.Time, error)
 
+	GetStatusError    func(O) string
 	UpdateStatusError func(O, string) O
 
 	NeedsRefresh func(logr.Logger, *corev1.Secret, func() time.Time) bool
@@ -140,7 +142,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	if r.ValidateBinding != nil {
 		if err := r.ValidateBinding(acrBinding); err != nil {
 			logger.Info(err.Error())
-			return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error())}
+			return r.statusErrorAction(acrBinding, err.Error(), false)
 		}
 	}
 
@@ -169,7 +171,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	if serviceAccount == nil {
 		err := fmt.Sprintf("service account %q not found", r.GetServiceAccountName(acrBinding))
 		logger.Info(err)
-		return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err)}
+		return r.statusErrorAction(acrBinding, err, false)
 	}
 
 	expectedPullSecretName := r.GetPullSecretName(acrBinding)
@@ -188,8 +190,8 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 
 		dockerConfig, expiresOn, err := r.CreatePullCredential(ctx, acrBinding, serviceAccount)
 		if err != nil {
-			logger.Info(err.Error())
-			return &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, err.Error())}
+			logger.Error(err, "failed to generate pull credential")
+			return r.statusErrorAction(acrBinding, err.Error(), !isPermanentCredentialError(err))
 		}
 
 		newSecret := newPullSecret(acrBinding, r.GetPullSecretName(acrBinding), dockerConfig, r.Scheme, expiresOn, r.now, inputHash)
@@ -199,7 +201,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 			return &action[O]{createSecret: newSecret}
 		} else {
 			logger.Info("updating pull credential secret")
-			return &action[O]{updateSecret: newSecret}
+			return &action[O]{updateSecret: pullSecretForUpdate(pullSecret, newSecret)}
 		}
 	}
 
@@ -244,6 +246,21 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 	}
 
 	return r.setSuccessStatus(logger, acrBinding, pullSecret)
+}
+
+func (r *genericReconciler[O]) statusErrorAction(acrBinding O, message string, retry bool) *action[O] {
+	if r.GetStatusError(acrBinding) == message {
+		if retry {
+			return &action[O]{retryError: message}
+		}
+		return nil
+	}
+
+	action := &action[O]{updatePullBindingStatus: r.UpdateStatusError(acrBinding, message)}
+	if retry {
+		action.retryError = message
+	}
+	return action
 }
 
 // sortPullSecrets ensures the semantically-correct ordering of pull secrets for the service account. The order of pull
@@ -391,7 +408,13 @@ func (a *action[O]) execute(ctx context.Context, logger logr.Logger, client crcl
 	} else if a.updatePullBindingStatus != nil {
 		after := clampRequeue(refresh(a.updatePullBindingStatus))
 		logger.WithValues("requeueAfter", after).Info("re-queueing for later processing")
-		return ctrl.Result{RequeueAfter: after}, client.Status().Update(ctx, a.updatePullBindingStatus)
+		if err := client.Status().Update(ctx, a.updatePullBindingStatus); err != nil {
+			return ctrl.Result{}, err
+		}
+		if a.retryError != "" {
+			return ctrl.Result{}, fmt.Errorf("retrying after credential generation failure: %s", a.retryError)
+		}
+		return ctrl.Result{RequeueAfter: after}, nil
 	} else if a.createSecret != nil {
 		return ctrl.Result{}, client.Create(ctx, a.createSecret)
 	} else if a.updateSecret != nil {
@@ -400,6 +423,9 @@ func (a *action[O]) execute(ctx context.Context, logger logr.Logger, client crcl
 		return ctrl.Result{}, client.Delete(ctx, a.deleteSecret)
 	} else if a.updateServiceAccount != nil {
 		return ctrl.Result{}, client.Update(ctx, a.updateServiceAccount)
+	}
+	if a.retryError != "" {
+		return ctrl.Result{}, fmt.Errorf("retrying after credential generation failure: %s", a.retryError)
 	}
 	logger.Info("no action taken")
 	return ctrl.Result{}, nil
@@ -425,11 +451,21 @@ type pullBinding interface {
 	crclient.Object
 }
 
+type permanentCredentialError struct {
+	error
+}
+
+func isPermanentCredentialError(err error) bool {
+	var permanent permanentCredentialError
+	return errors.As(err, &permanent)
+}
+
 // action captures the outcome of a reconciliation pass using static data, to aid in testing the reconciliation loop
 type action[O pullBinding] struct {
 	updatePullBinding       O
 	noop                    O
 	updatePullBindingStatus O
+	retryError              string
 
 	createSecret *corev1.Secret
 	updateSecret *corev1.Secret

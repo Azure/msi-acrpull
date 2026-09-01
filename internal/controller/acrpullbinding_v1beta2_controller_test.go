@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -396,6 +397,7 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 						Error: `failed to retrieve ARM token: oops`,
 					},
 				},
+				retryError: `failed to retrieve ARM token: oops`,
 			},
 		},
 		{
@@ -1596,6 +1598,59 @@ func Test_ACRPullBindingController_v1beta2_reconcile(t *testing.T) {
 			output := controller.reconcile(context.Background(), logger, testCase.acrBinding, testCase.serviceAccount, testCase.pullSecrets, testCase.referencingServiceAccounts)
 			if diff := cmp.Diff(testCase.output, output, cmp.AllowUnexported(action[*msiacrpullv1beta2.AcrPullBinding]{})); diff != "" {
 				t.Errorf("-want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestV1beta2CreatePullCredentialRejectsEmptyWorkloadIdentityAnnotations(t *testing.T) {
+	binding := &msiacrpullv1beta2.AcrPullBinding{
+		Spec: msiacrpullv1beta2.AcrPullBindingSpec{
+			Auth: msiacrpullv1beta2.AuthenticationMethod{
+				WorkloadIdentity: &msiacrpullv1beta2.WorkloadIdentityAuth{},
+			},
+		},
+	}
+
+	for _, testCase := range []struct {
+		name        string
+		annotations map[string]string
+		wantError   string
+	}{
+		{
+			name: "empty client ID",
+			annotations: map[string]string{
+				"azure.workload.identity/client-id": "",
+				"azure.workload.identity/tenant-id": "tenant-id",
+			},
+			wantError: "missing azure.workload.identity/client-id annotation",
+		},
+		{
+			name: "empty tenant ID",
+			annotations: map[string]string{
+				"azure.workload.identity/client-id": "client-id",
+				"azure.workload.identity/tenant-id": "",
+			},
+			wantError: "missing azure.workload.identity/tenant-id annotation",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			controller := NewV1beta2Reconciler(&V1beta2ReconcilerOpts{
+				mintToken: func(context.Context, string, string) (*authenticationv1.TokenRequest, error) {
+					t.Fatal("mintToken called for invalid workload identity annotations")
+					return nil, nil
+				},
+			})
+			serviceAccount := &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{Name: "delegate", Annotations: testCase.annotations},
+			}
+
+			_, _, err := controller.CreatePullCredential(context.Background(), binding, serviceAccount)
+			if err == nil || !strings.Contains(err.Error(), testCase.wantError) {
+				t.Fatalf("expected %q, got %v", testCase.wantError, err)
+			}
+			if !isPermanentCredentialError(err) {
+				t.Fatalf("expected permanent credential error, got %T: %v", err, err)
 			}
 		})
 	}
