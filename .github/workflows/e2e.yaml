@@ -38,14 +38,14 @@ jobs:
         run: |
           echo "Azure CLI Current installed version"
           az version
-      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+      - uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Setup infrastructure
         run: make -C test/ _output/infrastructure.json _output/aks.kubeconfig _output/deploy/prometheus-crds _output/system-vmss-puller.json _output/tenant "UNIQUE_INPUT=${UNIQUE_INPUT}"
-      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+      - uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         name: Refresh Azure login before ACR build
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -53,7 +53,7 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
       - name: Build and push controller image
         run: make -C test/ _output/image.json "UNIQUE_INPUT=${UNIQUE_INPUT}"
-      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+      - uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         name: Refresh Azure login before test image imports
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
@@ -62,7 +62,7 @@ jobs:
         # Refresh OIDC assertion so ACR commands in test targets succeed
       - name: E2E test
         run: make -C test/ test "UNIQUE_INPUT=${UNIQUE_INPUT}"
-      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+      - uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         name: Refresh Azure login before cleanup
         if: ${{ always() }}
         with:
