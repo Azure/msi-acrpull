@@ -134,12 +134,12 @@ func NewV1beta2Reconciler(opts *V1beta2ReconcilerOpts) *PullBindingReconciler {
 
 				armToken, err := opts.fetchArmToken(ctx, binding.Spec, tenantId, clientId, token)
 				if err != nil {
-					return "", time.Time{}, fmt.Errorf("failed to retrieve ARM token: %v", err)
+					return "", time.Time{}, credentialGenerationError{operation: "failed to retrieve ARM token", err: err}
 				}
 
 				acrToken, err := opts.exchangeArmTokenForAcrToken(ctx, armToken, binding.Spec.ACR)
 				if err != nil {
-					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR token: %v", err)
+					return "", time.Time{}, credentialGenerationError{operation: "failed to retrieve ACR token", err: err}
 				}
 
 				dockerConfig, err := authorizer.CreateACRDockerCfg(binding.Spec.ACR.Server, acrToken)

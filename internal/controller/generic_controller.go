@@ -2,13 +2,15 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
 
+	azruntime "github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	"github.com/go-logr/logr"
@@ -192,7 +194,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		dockerConfig, expiresOn, err := r.CreatePullCredential(ctx, acrBinding, serviceAccount)
 		if err != nil {
 			logger.Error(err, "failed to generate pull credential")
-			return r.statusErrorAction(acrBinding, err.Error(), !isPermanentCredentialError(err))
+			return r.statusErrorAction(acrBinding, credentialStatusMessage(err), !isPermanentCredentialError(err))
 		}
 
 		newSecret := newPullSecret(acrBinding, r.GetPullSecretName(acrBinding), dockerConfig, r.Scheme, expiresOn, r.now, inputHash)
@@ -250,7 +252,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 }
 
 func (r *genericReconciler[O]) statusErrorAction(acrBinding O, message string, retry bool) *action[O] {
-	if equivalentStatusErrors(r.GetStatusError(acrBinding), message) {
+	if r.GetStatusError(acrBinding) == message {
 		if retry {
 			return &action[O]{retryError: message}
 		}
@@ -264,13 +266,55 @@ func (r *genericReconciler[O]) statusErrorAction(acrBinding O, message string, r
 	return action
 }
 
-var correlationIDPattern = regexp.MustCompile(`(?i)(correlation\s*id\s*:\s*)[0-9a-f-]{16,}`)
+type credentialGenerationError struct {
+	operation string
+	err       error
+}
 
-func equivalentStatusErrors(current, next string) bool {
-	normalize := func(message string) string {
-		return correlationIDPattern.ReplaceAllString(message, `${1}`)
+func (e credentialGenerationError) Error() string {
+	return fmt.Sprintf("%s: %v", e.operation, e.err)
+}
+
+func (e credentialGenerationError) Unwrap() error {
+	return e.err
+}
+
+func credentialStatusMessage(err error) string {
+	var authenticationError *azidentity.AuthenticationFailedError
+	if !errors.As(err, &authenticationError) || authenticationError.RawResponse == nil {
+		return err.Error()
 	}
-	return normalize(current) == normalize(next)
+
+	payload, readErr := azruntime.Payload(authenticationError.RawResponse)
+	if readErr != nil {
+		return err.Error()
+	}
+
+	var response struct {
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	if json.Unmarshal(payload, &response) != nil {
+		return err.Error()
+	}
+
+	codes := make([]string, 0, len(response.Errors))
+	for _, responseError := range response.Errors {
+		if responseError.Code != "" && !slices.Contains(codes, responseError.Code) {
+			codes = append(codes, responseError.Code)
+		}
+	}
+	if len(codes) == 0 {
+		return err.Error()
+	}
+
+	operation := "failed to generate pull credential"
+	var generationError credentialGenerationError
+	if errors.As(err, &generationError) {
+		operation = generationError.operation
+	}
+	return fmt.Sprintf("%s: authentication failed with HTTP status %d: %s", operation, authenticationError.RawResponse.StatusCode, strings.Join(codes, ", "))
 }
 
 // sortPullSecrets ensures the semantically-correct ordering of pull secrets for the service account. The order of pull

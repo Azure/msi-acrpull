@@ -1,11 +1,17 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
@@ -172,43 +178,57 @@ func TestActionExecuteReturnsTransientErrorWithoutStatusUpdate(t *testing.T) {
 	}
 }
 
-func TestStatusErrorActionSkipsEquivalentStatus(t *testing.T) {
-	const prefix = "failed to retrieve ACR token: REQUEST_BODY_INVALID: Request body is invalid. CorrelationId: "
-	for _, testCase := range []struct {
-		name    string
-		current string
-		next    string
-	}{
-		{
-			name:    "identical error",
-			current: "temporary Azure outage",
-			next:    "temporary Azure outage",
-		},
-		{
-			name:    "different correlation IDs",
-			current: prefix + "92b4e2ff-be91-4ad1-bc95-ea0337098e30",
-			next:    prefix + "336c85eb-f609-45c2-8a53-89396db5c5a3",
-		},
+func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) {
+	statuses := make([]string, 0, 2)
+	for _, correlationID := range []string{
+		"92b4e2ff-be91-4ad1-bc95-ea0337098e30",
+		"336c85eb-f609-45c2-8a53-89396db5c5a3",
 	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			binding := &msiacrpullv1beta1.AcrPullBinding{
-				Status: msiacrpullv1beta1.AcrPullBindingStatus{Error: testCase.current},
-			}
-			reconciler := &genericReconciler[*msiacrpullv1beta1.AcrPullBinding]{
-				GetStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
-					return binding.Status.Error
+		body := fmt.Sprintf(`{"errors":[{"code":"REQUEST_BODY_INVALID","message":"Request body is invalid. CorrelationId: %s"}]}`, correlationID)
+		err := credentialGenerationError{
+			operation: "failed to retrieve ARM token",
+			err: &azidentity.AuthenticationFailedError{
+				RawResponse: &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(bytes.NewBufferString(body)),
 				},
-				UpdateStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding, message string) *msiacrpullv1beta1.AcrPullBinding {
-					t.Fatal("equivalent status should not be updated")
-					return nil
-				},
-			}
+			},
+		}
+		statuses = append(statuses, credentialStatusMessage(err))
+	}
 
-			action := reconciler.statusErrorAction(binding, testCase.next, true)
-			if action.updatePullBindingStatus != nil || action.retryError != testCase.next {
-				t.Fatalf("expected retry without status update, got %#v", action)
-			}
-		})
+	const expected = "failed to retrieve ARM token: authentication failed with HTTP status 400: REQUEST_BODY_INVALID"
+	for _, status := range statuses {
+		if status != expected {
+			t.Fatalf("expected stable structured status %q, got %q", expected, status)
+		}
+	}
+
+	binding := &msiacrpullv1beta1.AcrPullBinding{
+		Status: msiacrpullv1beta1.AcrPullBindingStatus{Error: statuses[0]},
+	}
+	reconciler := &genericReconciler[*msiacrpullv1beta1.AcrPullBinding]{
+		GetStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
+			return binding.Status.Error
+		},
+		UpdateStatusError: func(*msiacrpullv1beta1.AcrPullBinding, string) *msiacrpullv1beta1.AcrPullBinding {
+			t.Fatal("stable authentication error should not update status")
+			return nil
+		},
+	}
+	action := reconciler.statusErrorAction(binding, statuses[1], true)
+	if action.updatePullBindingStatus != nil || action.retryError != statuses[1] {
+		t.Fatalf("expected retry without status update, got %#v", action)
+	}
+}
+
+func TestCredentialStatusMessagePreservesUnknownError(t *testing.T) {
+	err := credentialGenerationError{
+		operation: "failed to retrieve ARM token",
+		err:       errors.New("temporary Azure outage"),
+	}
+	if status := credentialStatusMessage(err); status != err.Error() {
+		t.Fatalf("expected original error %q, got %q", err.Error(), status)
 	}
 }
 
