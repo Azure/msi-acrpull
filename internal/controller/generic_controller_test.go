@@ -172,7 +172,47 @@ func TestActionExecuteReturnsTransientErrorWithoutStatusUpdate(t *testing.T) {
 	}
 }
 
-func TestStatusErrorActionSkipsUnchangedStatus(t *testing.T) {
+func TestStatusErrorActionSkipsEquivalentStatus(t *testing.T) {
+	const prefix = "failed to retrieve ACR token: REQUEST_BODY_INVALID: Request body is invalid. CorrelationId: "
+	for _, testCase := range []struct {
+		name    string
+		current string
+		next    string
+	}{
+		{
+			name:    "identical error",
+			current: "temporary Azure outage",
+			next:    "temporary Azure outage",
+		},
+		{
+			name:    "different correlation IDs",
+			current: prefix + "92b4e2ff-be91-4ad1-bc95-ea0337098e30",
+			next:    prefix + "336c85eb-f609-45c2-8a53-89396db5c5a3",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			binding := &msiacrpullv1beta1.AcrPullBinding{
+				Status: msiacrpullv1beta1.AcrPullBindingStatus{Error: testCase.current},
+			}
+			reconciler := &genericReconciler[*msiacrpullv1beta1.AcrPullBinding]{
+				GetStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding) string {
+					return binding.Status.Error
+				},
+				UpdateStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding, message string) *msiacrpullv1beta1.AcrPullBinding {
+					t.Fatal("equivalent status should not be updated")
+					return nil
+				},
+			}
+
+			action := reconciler.statusErrorAction(binding, testCase.next, true)
+			if action.updatePullBindingStatus != nil || action.retryError != testCase.next {
+				t.Fatalf("expected retry without status update, got %#v", action)
+			}
+		})
+	}
+}
+
+func TestStatusErrorActionUpdatesDifferentStatus(t *testing.T) {
 	binding := &msiacrpullv1beta1.AcrPullBinding{
 		Status: msiacrpullv1beta1.AcrPullBindingStatus{Error: "temporary Azure outage"},
 	}
@@ -181,14 +221,16 @@ func TestStatusErrorActionSkipsUnchangedStatus(t *testing.T) {
 			return binding.Status.Error
 		},
 		UpdateStatusError: func(binding *msiacrpullv1beta1.AcrPullBinding, message string) *msiacrpullv1beta1.AcrPullBinding {
-			t.Fatal("unchanged status should not be updated")
-			return nil
+			updated := binding.DeepCopy()
+			updated.Status.Error = message
+			return updated
 		},
 	}
 
-	action := reconciler.statusErrorAction(binding, binding.Status.Error, true)
-	if action.updatePullBindingStatus != nil || action.retryError != binding.Status.Error {
-		t.Fatalf("expected retry without status update, got %#v", action)
+	const next = "authentication failed"
+	action := reconciler.statusErrorAction(binding, next, true)
+	if action.updatePullBindingStatus == nil || action.updatePullBindingStatus.Status.Error != next || action.retryError != next {
+		t.Fatalf("expected status update and retry, got %#v", action)
 	}
 }
 

@@ -140,6 +140,31 @@ type binding interface {
 // bindingMinter is a constructor for a non-nil pointer to a binding, since we can't create that with `B`
 type bindingMinter[B binding] func(namespace, name, scope, serviceAccount string, cfg *Config) B
 
+func updateBindingScope[B binding](
+	ctx context.Context,
+	client crclient.Client,
+	namespace, name, scope string,
+	newBinding func(namespace, name string) B,
+) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current := newBinding(namespace, name)
+		if err := client.Get(ctx, crclient.ObjectKeyFromObject(current), current); err != nil {
+			return err
+		}
+
+		switch binding := any(current).(type) {
+		case *msiacrpullv1beta1.AcrPullBinding:
+			binding.Spec.Scope = scope
+		case *msiacrpullv1beta2.AcrPullBinding:
+			binding.Spec.ACR.Scope = scope
+		default:
+			return fmt.Errorf("unsupported binding type %T", current)
+		}
+
+		return client.Update(ctx, current)
+	})
+}
+
 func testACRPullBinding[B binding](
 	t *testing.T, prefix string,
 	createBinding bindingMinter[B],
@@ -256,29 +281,13 @@ func testACRPullBinding[B binding](
 		eventuallyFulfillPullBinding[B](t, ctx, client, namespace, pullBinding, newBinding)
 
 		t.Logf("updating pull binding %s/%s to refer to invalid scope", namespace, pullBinding)
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			thisBinding := newBinding(namespace, pullBinding)
-			if err := client.Get(ctx, crclient.ObjectKeyFromObject(thisBinding), thisBinding); err != nil {
-				return err
-			}
-			updatedBinding := createBinding(namespace, pullBinding, "invalid!>?$q34m2,", serviceAccount, cfg)
-			updatedBinding.SetResourceVersion(thisBinding.GetResourceVersion())
-			return client.Update(ctx, updatedBinding)
-		}); err != nil {
+		if err := updateBindingScope(ctx, client, namespace, pullBinding, "invalid!>?$q34m2,", newBinding); err != nil {
 			t.Fatalf("failed to update pull binding %s/%s: %v", namespace, pullBinding, err)
 		}
 		eventuallyFailToFulfillPullBindingKeepingTimes[B](t, ctx, client, namespace, pullBinding, newBinding)
 
 		t.Logf("updating pull binding %s/%s to refer to valid scope", namespace, pullBinding)
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			thisBinding := newBinding(namespace, pullBinding)
-			if err := client.Get(ctx, crclient.ObjectKeyFromObject(thisBinding), thisBinding); err != nil {
-				return err
-			}
-			updatedBinding := createBinding(namespace, pullBinding, "repository:alice:pull", serviceAccount, cfg)
-			updatedBinding.SetResourceVersion(thisBinding.GetResourceVersion())
-			return client.Update(ctx, updatedBinding)
-		}); err != nil {
+		if err := updateBindingScope(ctx, client, namespace, pullBinding, "repository:alice:pull", newBinding); err != nil {
 			t.Fatalf("failed to update pull binding %s/%s: %v", namespace, pullBinding, err)
 		}
 		eventuallyFulfillPullBinding[B](t, ctx, client, namespace, pullBinding, newBinding)

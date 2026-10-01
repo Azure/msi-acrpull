@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -249,7 +250,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 }
 
 func (r *genericReconciler[O]) statusErrorAction(acrBinding O, message string, retry bool) *action[O] {
-	if r.GetStatusError(acrBinding) == message {
+	if equivalentStatusErrors(r.GetStatusError(acrBinding), message) {
 		if retry {
 			return &action[O]{retryError: message}
 		}
@@ -261,6 +262,15 @@ func (r *genericReconciler[O]) statusErrorAction(acrBinding O, message string, r
 		action.retryError = message
 	}
 	return action
+}
+
+var correlationIDPattern = regexp.MustCompile(`(?i)(correlation\s*id\s*:\s*)[0-9a-f-]{16,}`)
+
+func equivalentStatusErrors(current, next string) bool {
+	normalize := func(message string) string {
+		return correlationIDPattern.ReplaceAllString(message, `${1}`)
+	}
+	return normalize(current) == normalize(next)
 }
 
 // sortPullSecrets ensures the semantically-correct ordering of pull secrets for the service account. The order of pull
