@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	azruntime "github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
@@ -280,27 +282,27 @@ func (e credentialGenerationError) Unwrap() error {
 }
 
 func credentialStatusMessage(err error) string {
-	var authenticationError *azidentity.AuthenticationFailedError
-	if !errors.As(err, &authenticationError) || authenticationError.RawResponse == nil {
+	response := credentialErrorResponse(err)
+	if response == nil {
 		return err.Error()
 	}
 
-	payload, readErr := azruntime.Payload(authenticationError.RawResponse)
+	payload, readErr := azruntime.Payload(response)
 	if readErr != nil {
 		return err.Error()
 	}
 
-	var response struct {
+	var responseBody struct {
 		Errors []struct {
 			Code string `json:"code"`
 		} `json:"errors"`
 	}
-	if json.Unmarshal(payload, &response) != nil {
+	if json.Unmarshal(payload, &responseBody) != nil {
 		return err.Error()
 	}
 
-	codes := make([]string, 0, len(response.Errors))
-	for _, responseError := range response.Errors {
+	codes := make([]string, 0, len(responseBody.Errors))
+	for _, responseError := range responseBody.Errors {
 		if responseError.Code != "" && !slices.Contains(codes, responseError.Code) {
 			codes = append(codes, responseError.Code)
 		}
@@ -314,7 +316,21 @@ func credentialStatusMessage(err error) string {
 	if errors.As(err, &generationError) {
 		operation = generationError.operation
 	}
-	return fmt.Sprintf("%s: authentication failed with HTTP status %d: %s", operation, authenticationError.RawResponse.StatusCode, strings.Join(codes, ", "))
+	return fmt.Sprintf("%s: request failed with HTTP status %d: %s", operation, response.StatusCode, strings.Join(codes, ", "))
+}
+
+func credentialErrorResponse(err error) *http.Response {
+	var responseError *azcore.ResponseError
+	if errors.As(err, &responseError) {
+		return responseError.RawResponse
+	}
+
+	var authenticationError *azidentity.AuthenticationFailedError
+	if errors.As(err, &authenticationError) {
+		return authenticationError.RawResponse
+	}
+
+	return nil
 }
 
 // sortPullSecrets ensures the semantically-correct ordering of pull secrets for the service account. The order of pull

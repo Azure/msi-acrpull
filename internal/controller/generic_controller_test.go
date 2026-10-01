@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	msiacrpullv1beta1 "github.com/Azure/msi-acrpull/api/v1beta1"
 	"github.com/go-logr/logr"
@@ -178,7 +179,7 @@ func TestActionExecuteReturnsTransientErrorWithoutStatusUpdate(t *testing.T) {
 	}
 }
 
-func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) {
+func TestCredentialStatusMessageUsesStructuredResponseError(t *testing.T) {
 	statuses := make([]string, 0, 2)
 	for _, correlationID := range []string{
 		"92b4e2ff-be91-4ad1-bc95-ea0337098e30",
@@ -186,8 +187,9 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 	} {
 		body := fmt.Sprintf(`{"errors":[{"code":"REQUEST_BODY_INVALID","message":"Request body is invalid. CorrelationId: %s"}]}`, correlationID)
 		err := credentialGenerationError{
-			operation: "failed to retrieve ARM token",
-			err: &azidentity.AuthenticationFailedError{
+			operation: "failed to retrieve ACR token",
+			err: &azcore.ResponseError{
+				StatusCode: http.StatusBadRequest,
 				RawResponse: &http.Response{
 					StatusCode: http.StatusBadRequest,
 					Body:       io.NopCloser(bytes.NewBufferString(body)),
@@ -197,7 +199,7 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 		statuses = append(statuses, credentialStatusMessage(err))
 	}
 
-	const expected = "failed to retrieve ARM token: authentication failed with HTTP status 400: REQUEST_BODY_INVALID"
+	const expected = "failed to retrieve ACR token: request failed with HTTP status 400: REQUEST_BODY_INVALID"
 	for _, status := range statuses {
 		if status != expected {
 			t.Fatalf("expected stable structured status %q, got %q", expected, status)
@@ -219,6 +221,24 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 	action := reconciler.statusErrorAction(binding, statuses[1], true)
 	if action.updatePullBindingStatus != nil || action.retryError != statuses[1] {
 		t.Fatalf("expected retry without status update, got %#v", action)
+	}
+}
+
+func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) {
+	const body = `{"errors":[{"code":"IDENTITY_NOT_FOUND","message":"The requested identity wasn't found"}]}`
+	err := credentialGenerationError{
+		operation: "failed to retrieve ARM token",
+		err: &azidentity.AuthenticationFailedError{
+			RawResponse: &http.Response{
+				StatusCode: http.StatusBadRequest,
+				Body:       io.NopCloser(strings.NewReader(body)),
+			},
+		},
+	}
+
+	const expected = "failed to retrieve ARM token: request failed with HTTP status 400: IDENTITY_NOT_FOUND"
+	if status := credentialStatusMessage(err); status != expected {
+		t.Fatalf("expected structured status %q, got %q", expected, status)
 	}
 }
 
