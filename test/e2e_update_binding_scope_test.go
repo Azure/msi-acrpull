@@ -18,7 +18,37 @@ import (
 )
 
 func TestUpdateBindingScope(t *testing.T) {
-	t.Run("v1beta1", func(t *testing.T) {
+	t.Run("happy path updates without retry", func(t *testing.T) {
+		current := &msiacrpullv1beta1.AcrPullBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:       "test",
+				Name:            "binding",
+				ResourceVersion: "1",
+			},
+			Spec: msiacrpullv1beta1.AcrPullBindingSpec{
+				Scope: "repository:old:pull",
+			},
+		}
+		client := &scopeUpdateClient{current: current}
+
+		err := updateBindingScope(context.Background(), client, "test", "binding", "repository:alice:pull",
+			func(namespace, name string) *msiacrpullv1beta1.AcrPullBinding {
+				return &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
+			})
+		if err != nil {
+			t.Fatalf("update binding scope: %v", err)
+		}
+
+		if client.gets != 1 || client.updates != 1 {
+			t.Fatalf("calls = Get:%d Update:%d, want Get:1 Update:1", client.gets, client.updates)
+		}
+		updated := client.updated.(*msiacrpullv1beta1.AcrPullBinding)
+		if updated.Spec.Scope != "repository:alice:pull" {
+			t.Fatalf("scope = %q, want %q", updated.Spec.Scope, "repository:alice:pull")
+		}
+	})
+
+	t.Run("v1beta1 retries conflicts", func(t *testing.T) {
 		current := &msiacrpullv1beta1.AcrPullBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:       "test",
@@ -52,7 +82,7 @@ func TestUpdateBindingScope(t *testing.T) {
 		assertConcurrentChangesPreserved(t, client, updated)
 	})
 
-	t.Run("v1beta2", func(t *testing.T) {
+	t.Run("v1beta2 retries conflicts", func(t *testing.T) {
 		current := &msiacrpullv1beta2.AcrPullBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:       "test",
@@ -90,6 +120,72 @@ func TestUpdateBindingScope(t *testing.T) {
 		}
 		assertConcurrentChangesPreserved(t, client, updated)
 	})
+
+	t.Run("sad path returns exhausted conflict retries", func(t *testing.T) {
+		current := &msiacrpullv1beta1.AcrPullBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:       "test",
+				Name:            "binding",
+				ResourceVersion: "1",
+				Annotations:     map[string]string{},
+			},
+		}
+		client := &scopeUpdateClient{current: current, conflicts: 100}
+
+		err := updateBindingScope(context.Background(), client, "test", "binding", "repository:alice:pull",
+			func(namespace, name string) *msiacrpullv1beta1.AcrPullBinding {
+				return &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
+			})
+
+		if !apierrors.IsConflict(err) {
+			t.Fatalf("error = %v, want Conflict", err)
+		}
+		if client.gets < 2 || client.updates != client.gets {
+			t.Fatalf("calls = Get:%d Update:%d, want multiple matching attempts", client.gets, client.updates)
+		}
+		if client.updated != nil {
+			t.Fatalf("unexpected successful update: %T", client.updated)
+		}
+	})
+}
+
+func TestUpdateBindingScopeDoesNotRetryNonConflictErrors(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		updateErr error
+	}{
+		{
+			name:      "client failure",
+			updateErr: apierrors.NewBadRequest("invalid binding update"),
+		},
+		{
+			name:      "server failure",
+			updateErr: apierrors.NewInternalError(stderrors.New("API server unavailable")),
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			current := &msiacrpullv1beta1.AcrPullBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:       "test",
+					Name:            "binding",
+					ResourceVersion: "1",
+				},
+			}
+			client := &scopeUpdateClient{current: current, updateErr: testCase.updateErr}
+
+			err := updateBindingScope(context.Background(), client, "test", "binding", "repository:alice:pull",
+				func(namespace, name string) *msiacrpullv1beta1.AcrPullBinding {
+					return &msiacrpullv1beta1.AcrPullBinding{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
+				})
+
+			if !stderrors.Is(err, testCase.updateErr) {
+				t.Fatalf("error = %v, want %v", err, testCase.updateErr)
+			}
+			if client.gets != 1 || client.updates != 1 {
+				t.Fatalf("calls = Get:%d Update:%d, want Get:1 Update:1", client.gets, client.updates)
+			}
+		})
+	}
 }
 
 func TestUpdateBindingScopeReturnsGetErrors(t *testing.T) {
@@ -148,7 +244,9 @@ type scopeUpdateClient struct {
 	updated   crclient.Object
 	conflicts int
 	gets      int
+	updates   int
 	getErr    error
+	updateErr error
 }
 
 func (c *scopeUpdateClient) Get(_ context.Context, _ crclient.ObjectKey, obj crclient.Object, _ ...crclient.GetOption) error {
@@ -169,9 +267,13 @@ func (c *scopeUpdateClient) Get(_ context.Context, _ crclient.ObjectKey, obj crc
 }
 
 func (c *scopeUpdateClient) Update(_ context.Context, obj crclient.Object, _ ...crclient.UpdateOption) error {
+	c.updates++
+	if c.updateErr != nil {
+		return c.updateErr
+	}
 	if c.conflicts > 0 {
 		c.conflicts--
-		revision := 3 - c.conflicts
+		revision := c.updates + 1
 		c.applyConcurrentUpdate(revision)
 		return apierrors.NewConflict(
 			schema.GroupResource{Group: "acrpull.microsoft.com", Resource: "acrpullbindings"},

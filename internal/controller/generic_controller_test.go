@@ -242,6 +242,25 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 	}
 }
 
+func TestCredentialStatusMessageUsesStructuredServerResponseError(t *testing.T) {
+	const body = `{"errors":[{"code":"INTERNAL_ERROR","message":"The registry service is temporarily unavailable"}]}`
+	err := credentialGenerationError{
+		operation: "failed to retrieve ACR token",
+		err: &azcore.ResponseError{
+			StatusCode: http.StatusInternalServerError,
+			RawResponse: &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Body:       io.NopCloser(strings.NewReader(body)),
+			},
+		},
+	}
+
+	const expected = "failed to retrieve ACR token: request failed with HTTP status 500: INTERNAL_ERROR"
+	if status := credentialStatusMessage(err); status != expected {
+		t.Fatalf("expected structured status %q, got %q", expected, status)
+	}
+}
+
 func TestCredentialStatusMessagePreservesUnknownError(t *testing.T) {
 	err := credentialGenerationError{
 		operation: "failed to retrieve ARM token",
