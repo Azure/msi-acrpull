@@ -17,6 +17,7 @@ import (
 	msiacrpullv1beta2 "github.com/Azure/msi-acrpull/api/v1beta2"
 	"github.com/Azure/msi-acrpull/pkg/authorizer/mock_authorizer"
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/google/go-cmp/cmp"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
@@ -206,7 +207,7 @@ func TestCredentialStatusMessageUsesStructuredResponseError(t *testing.T) {
 		statuses = append(statuses, credentialStatusMessage(err))
 	}
 
-	const expected = "failed to retrieve ACR token: request failed with HTTP status 400: REQUEST_BODY_INVALID: Request body is invalid."
+	const expected = "failed to retrieve ACR token: request failed with HTTP status 400: REQUEST_BODY_INVALID"
 	for _, status := range statuses {
 		if status != expected {
 			t.Fatalf("expected stable structured status %q, got %q", expected, status)
@@ -243,7 +244,7 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 		},
 	}
 
-	const expected = "failed to retrieve ARM token: request failed with HTTP status 400: IDENTITY_NOT_FOUND: The requested identity wasn't found"
+	const expected = "failed to retrieve ARM token: request failed with HTTP status 400: IDENTITY_NOT_FOUND"
 	if status := credentialStatusMessage(err); status != expected {
 		t.Fatalf("expected structured status %q, got %q", expected, status)
 	}
@@ -251,32 +252,28 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 
 func TestCredentialStatusMessageNormalizesAuthenticationPayloads(t *testing.T) {
 	for _, testCase := range []struct {
-		name       string
-		body       string
-		codes      string
-		diagnostic string
+		name  string
+		body  string
+		codes string
 	}{
 		{
-			name:       "managed identity",
-			body:       `{"error":"invalid_request","error_description":"Identity not found. Correlation ID: %[1]s. Timestamp: %[2]s","correlation_id":"%[1]s"}`,
-			codes:      "invalid_request",
-			diagnostic: "Identity not found.",
+			name:  "managed identity",
+			body:  `{"error":"invalid_request","error_description":"Identity not found. Correlation ID: %[1]s. Timestamp: %[2]s","correlation_id":"%[1]s"}`,
+			codes: "invalid_request",
 		},
 		{
-			name:       "Entra",
-			body:       `{"error":"invalid_client","error_description":"AADSTS700016: Application was not found in the directory.\r\nTrace ID: %[1]s\r\nCorrelation ID: %[1]s\r\nTimestamp: %[2]s","error_codes":[700016],"timestamp":"%[2]s","trace_id":"%[1]s","correlation_id":"%[1]s","error_uri":"https://login.microsoftonline.com/error?code=700016"}`,
-			codes:      "700016, invalid_client",
-			diagnostic: "AADSTS700016: Application was not found in the directory.",
+			name:  "Entra",
+			body:  `{"error":"invalid_client","error_description":"AADSTS700016: Application was not found in the directory.\r\nTrace ID: %[1]s\r\nCorrelation ID: %[1]s\r\nTimestamp: %[2]s","error_codes":[700016],"timestamp":"%[2]s","trace_id":"%[1]s","correlation_id":"%[1]s","error_uri":"https://login.microsoftonline.com/error?code=700016"}`,
+			codes: "700016, invalid_client",
 		},
 		{
-			name:       "different Entra code",
-			body:       `{"error":"invalid_client","error_codes":[7000215],"error_description":"Invalid client secret. Correlation ID: %[1]s. Timestamp: %[2]s"}`,
-			codes:      "7000215, invalid_client",
-			diagnostic: "Invalid client secret.",
+			name:  "different Entra code",
+			body:  `{"error":"invalid_client","error_codes":[7000215],"error_description":"Invalid client secret. Correlation ID: %[1]s. Timestamp: %[2]s"}`,
+			codes: "7000215, invalid_client",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			expected := "failed to retrieve ARM token: request failed with HTTP status 400: " + testCase.codes + ": " + testCase.diagnostic
+			expected := "failed to retrieve ARM token: request failed with HTTP status 400: " + testCase.codes
 			for attempt, requestID := range []string{
 				"92b4e2ff-be91-4ad1-bc95-ea0337098e30",
 				"336c85eb-f609-45c2-8a53-89396db5c5a3",
@@ -339,36 +336,30 @@ func TestCredentialStatusMessageSortsAndDeduplicatesCodes(t *testing.T) {
 	}
 }
 
-func TestCredentialStatusMessagePreservesDiagnostics(t *testing.T) {
+func TestCredentialStatusMessageIgnoresDiagnostics(t *testing.T) {
 	for _, testCase := range []struct {
-		name       string
-		body       string
-		diagnostic string
+		name string
+		body string
 	}{
 		{
-			name:       "identity and unlabeled timestamp",
-			body:       `{"error":"invalid_request","error_description":"Identity 92b4e2ff-be91-4ad1-bc95-ea0337098e30 was disabled at 2026-10-08T15:31:00Z."}`,
-			diagnostic: "Identity 92b4e2ff-be91-4ad1-bc95-ea0337098e30 was disabled at 2026-10-08T15:31:00Z.",
+			name: "identity and unlabeled timestamp",
+			body: `{"error":"invalid_request","error_description":"Identity 92b4e2ff-be91-4ad1-bc95-ea0337098e30 was disabled at 2026-10-08T15:31:00Z."}`,
 		},
 		{
-			name:       "diagnostic after metadata",
-			body:       `{"error":"invalid_request","error_description":"CorrelationId: 92b4e2ff-be91-4ad1-bc95-ea0337098e30. Identity not found. Timestamp: 2026-10-08T15:31:00.123+00:00. Specify a client ID."}`,
-			diagnostic: "Identity not found. Specify a client ID.",
+			name: "diagnostic after metadata",
+			body: `{"error":"invalid_request","error_description":"CorrelationId: 92b4e2ff-be91-4ad1-bc95-ea0337098e30. Identity not found. Timestamp: 2026-10-08T15:31:00.123+00:00. Specify a client ID."}`,
 		},
 		{
-			name:       "unknown metadata format",
-			body:       `{"error":"invalid_request","error_description":"Trace ID: unavailable. Timestamp: unknown. Identity not found."}`,
-			diagnostic: "Trace ID: unavailable. Timestamp: unknown. Identity not found.",
+			name: "unknown metadata format",
+			body: `{"error":"invalid_request","error_description":"Trace ID: unavailable. Timestamp: unknown. Identity not found."}`,
 		},
 		{
-			name:       "top level message",
-			body:       `{"error":"invalid_request","message":"Identity not found. Correlation_ID: 92b4e2ff-be91-4ad1-bc95-ea0337098e30"}`,
-			diagnostic: "Identity not found.",
+			name: "top level message",
+			body: `{"error":"invalid_request","message":"Identity not found. Correlation_ID: 92b4e2ff-be91-4ad1-bc95-ea0337098e30"}`,
 		},
 		{
-			name:       "multiple messages sorted and deduplicated",
-			body:       `{"errors":[{"code":"invalid_request","message":"Scope is invalid."},{"code":"invalid_request","message":"Identity not found."},{"code":"invalid_request","message":"Scope is invalid."}],"error_description":"Identity not found."}`,
-			diagnostic: "Identity not found.; Scope is invalid.",
+			name: "multiple messages",
+			body: `{"errors":[{"code":"invalid_request","message":"Scope is invalid."},{"code":"invalid_request","message":"Identity not found."},{"code":"invalid_request","message":"Scope is invalid."}],"error_description":"Identity not found."}`,
 		},
 		{
 			name: "metadata only",
@@ -383,11 +374,8 @@ func TestCredentialStatusMessagePreservesDiagnostics(t *testing.T) {
 				},
 			}
 			expected := "failed to generate pull credential: request failed with HTTP status 400: invalid_request"
-			if testCase.diagnostic != "" {
-				expected += ": " + testCase.diagnostic
-			}
 			if status := credentialStatusMessage(err); status != expected {
-				t.Fatalf("expected diagnostic status %q, got %q", expected, status)
+				t.Fatalf("expected code-only status %q, got %q", expected, status)
 			}
 		})
 	}
@@ -495,6 +483,10 @@ func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
 					statusWriter: &recordingStatusWriter{SubResourceWriter: fakeClient.Status()},
 				}
 				var sdkErr error
+				var logs []string
+				logger := funcr.New(func(prefix, args string) {
+					logs = append(logs, prefix+args)
+				}, funcr.Options{})
 				calls := 0
 				var reconciler reconcile.Reconciler
 				var operation string
@@ -506,12 +498,12 @@ func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
 							return azcore.AccessToken{}, sdkErr
 						}).Times(3)
 					reconciler = NewV1beta1Reconciler(&V1beta1ReconcilerOpts{
-						CoreOpts: CoreOpts{Client: client, Scheme: s, Logger: logr.Discard()}, Auth: auth,
+						CoreOpts: CoreOpts{Client: client, Scheme: s, Logger: logger}, Auth: auth,
 					})
 					operation = "failed to retrieve ACR access token"
 				} else {
 					reconciler = NewV1beta2Reconciler(&V1beta2ReconcilerOpts{
-						CoreOpts: CoreOpts{Client: client, Scheme: s, Logger: logr.Discard()},
+						CoreOpts: CoreOpts{Client: client, Scheme: s, Logger: logger},
 						fetchArmToken: func(context.Context, msiacrpullv1beta2.AcrPullBindingSpec, string, string, string) (azcore.AccessToken, error) {
 							if path == "v1beta2 ARM token" {
 								calls++
@@ -539,14 +531,13 @@ func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
 					"336c85eb-f609-45c2-8a53-89396db5c5a3",
 				} {
 					diagnostic := errorCase.diagnostic
-					expectedUpdates := 1
 					if attempt == 2 {
 						diagnostic = errorCase.nextDiagnostic
-						expectedUpdates = 2
 					}
-					expected := operation + ": request failed with HTTP status 400: " + errorCase.codes + ": " + diagnostic
+					expected := operation + ": request failed with HTTP status 400: " + errorCase.codes
 					expectedRetry := "retrying after credential generation failure: " + expected
 					sdkErr = errorCase.err(correlationID, diagnostic)
+					logs = nil
 					result, err := reconciler.Reconcile(ctx, req)
 					if err == nil || err.Error() != expectedRetry {
 						t.Fatalf("attempt %d: expected retry error %q, got %v", attempt+1, expectedRetry, err)
@@ -557,8 +548,11 @@ func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
 					if calls != attempt+1 {
 						t.Fatalf("credential calls = %d, want %d", calls, attempt+1)
 					}
-					if client.statusWriter.updates != expectedUpdates {
-						t.Fatalf("attempt %d: status updates = %d, want %d", attempt+1, client.statusWriter.updates, expectedUpdates)
+					if client.statusWriter.updates != 1 {
+						t.Fatalf("attempt %d: status updates = %d, want 1", attempt+1, client.statusWriter.updates)
+					}
+					if output := strings.Join(logs, "\n"); !strings.Contains(output, diagnostic) || !strings.Contains(output, correlationID) {
+						t.Fatalf("attempt %d: expected full diagnostic and correlation ID in logs, got %s", attempt+1, output)
 					}
 					stored := binding.DeepCopyObject().(crclient.Object)
 					if err := fakeClient.Get(ctx, req.NamespacedName, stored); err != nil {
@@ -593,7 +587,7 @@ func TestCredentialStatusMessageUsesStructuredServerResponseError(t *testing.T) 
 		},
 	}
 
-	const expected = "failed to retrieve ACR token: request failed with HTTP status 500: INTERNAL_ERROR: The registry service is temporarily unavailable"
+	const expected = "failed to retrieve ACR token: request failed with HTTP status 500: INTERNAL_ERROR"
 	if status := credentialStatusMessage(err); status != expected {
 		t.Fatalf("expected structured status %q, got %q", expected, status)
 	}
