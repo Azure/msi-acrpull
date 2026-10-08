@@ -206,7 +206,7 @@ func TestCredentialStatusMessageUsesStructuredResponseError(t *testing.T) {
 		statuses = append(statuses, credentialStatusMessage(err))
 	}
 
-	const expected = "failed to retrieve ACR token: request failed with HTTP status 400: REQUEST_BODY_INVALID"
+	const expected = "failed to retrieve ACR token: request failed with HTTP status 400: REQUEST_BODY_INVALID: Request body is invalid."
 	for _, status := range statuses {
 		if status != expected {
 			t.Fatalf("expected stable structured status %q, got %q", expected, status)
@@ -243,7 +243,7 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 		},
 	}
 
-	const expected = "failed to retrieve ARM token: request failed with HTTP status 400: IDENTITY_NOT_FOUND"
+	const expected = "failed to retrieve ARM token: request failed with HTTP status 400: IDENTITY_NOT_FOUND: The requested identity wasn't found"
 	if status := credentialStatusMessage(err); status != expected {
 		t.Fatalf("expected structured status %q, got %q", expected, status)
 	}
@@ -251,28 +251,32 @@ func TestCredentialStatusMessageUsesStructuredAuthenticationError(t *testing.T) 
 
 func TestCredentialStatusMessageNormalizesAuthenticationPayloads(t *testing.T) {
 	for _, testCase := range []struct {
-		name  string
-		body  string
-		codes string
+		name       string
+		body       string
+		codes      string
+		diagnostic string
 	}{
 		{
-			name:  "managed identity",
-			body:  `{"error":"invalid_request","error_description":"Identity not found. Correlation ID: %[1]s. Timestamp: %[2]s","correlation_id":"%[1]s"}`,
-			codes: "invalid_request",
+			name:       "managed identity",
+			body:       `{"error":"invalid_request","error_description":"Identity not found. Correlation ID: %[1]s. Timestamp: %[2]s","correlation_id":"%[1]s"}`,
+			codes:      "invalid_request",
+			diagnostic: "Identity not found.",
 		},
 		{
-			name:  "Entra",
-			body:  `{"error":"invalid_client","error_description":"AADSTS700016: Application was not found in the directory.\r\nTrace ID: %[1]s\r\nCorrelation ID: %[1]s\r\nTimestamp: %[2]s","error_codes":[700016],"timestamp":"%[2]s","trace_id":"%[1]s","correlation_id":"%[1]s","error_uri":"https://login.microsoftonline.com/error?code=700016"}`,
-			codes: "700016, invalid_client",
+			name:       "Entra",
+			body:       `{"error":"invalid_client","error_description":"AADSTS700016: Application was not found in the directory.\r\nTrace ID: %[1]s\r\nCorrelation ID: %[1]s\r\nTimestamp: %[2]s","error_codes":[700016],"timestamp":"%[2]s","trace_id":"%[1]s","correlation_id":"%[1]s","error_uri":"https://login.microsoftonline.com/error?code=700016"}`,
+			codes:      "700016, invalid_client",
+			diagnostic: "AADSTS700016: Application was not found in the directory.",
 		},
 		{
-			name:  "different Entra code",
-			body:  `{"error":"invalid_client","error_codes":[7000215],"error_description":"Invalid client secret. Correlation ID: %[1]s. Timestamp: %[2]s"}`,
-			codes: "7000215, invalid_client",
+			name:       "different Entra code",
+			body:       `{"error":"invalid_client","error_codes":[7000215],"error_description":"Invalid client secret. Correlation ID: %[1]s. Timestamp: %[2]s"}`,
+			codes:      "7000215, invalid_client",
+			diagnostic: "Invalid client secret.",
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			expected := "failed to retrieve ARM token: request failed with HTTP status 400: " + testCase.codes
+			expected := "failed to retrieve ARM token: request failed with HTTP status 400: " + testCase.codes + ": " + testCase.diagnostic
 			for attempt, requestID := range []string{
 				"92b4e2ff-be91-4ad1-bc95-ea0337098e30",
 				"336c85eb-f609-45c2-8a53-89396db5c5a3",
@@ -335,48 +339,110 @@ func TestCredentialStatusMessageSortsAndDeduplicatesCodes(t *testing.T) {
 	}
 }
 
-func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
-	for _, errorCase := range []struct {
-		name  string
-		codes string
-		err   func(string) error
+func TestCredentialStatusMessagePreservesDiagnostics(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		body       string
+		diagnostic string
 	}{
 		{
-			name:  "ACR response",
-			codes: "REQUEST_BODY_INVALID",
-			err: func(correlationID string) error {
+			name:       "identity and unlabeled timestamp",
+			body:       `{"error":"invalid_request","error_description":"Identity 92b4e2ff-be91-4ad1-bc95-ea0337098e30 was disabled at 2026-10-08T15:31:00Z."}`,
+			diagnostic: "Identity 92b4e2ff-be91-4ad1-bc95-ea0337098e30 was disabled at 2026-10-08T15:31:00Z.",
+		},
+		{
+			name:       "diagnostic after metadata",
+			body:       `{"error":"invalid_request","error_description":"CorrelationId: 92b4e2ff-be91-4ad1-bc95-ea0337098e30. Identity not found. Timestamp: 2026-10-08T15:31:00.123+00:00. Specify a client ID."}`,
+			diagnostic: "Identity not found. Specify a client ID.",
+		},
+		{
+			name:       "unknown metadata format",
+			body:       `{"error":"invalid_request","error_description":"Trace ID: unavailable. Timestamp: unknown. Identity not found."}`,
+			diagnostic: "Trace ID: unavailable. Timestamp: unknown. Identity not found.",
+		},
+		{
+			name:       "top level message",
+			body:       `{"error":"invalid_request","message":"Identity not found. Correlation_ID: 92b4e2ff-be91-4ad1-bc95-ea0337098e30"}`,
+			diagnostic: "Identity not found.",
+		},
+		{
+			name:       "multiple messages sorted and deduplicated",
+			body:       `{"errors":[{"code":"invalid_request","message":"Scope is invalid."},{"code":"invalid_request","message":"Identity not found."},{"code":"invalid_request","message":"Scope is invalid."}],"error_description":"Identity not found."}`,
+			diagnostic: "Identity not found.; Scope is invalid.",
+		},
+		{
+			name: "metadata only",
+			body: `{"error":"invalid_request","error_description":"Trace ID: 92b4e2ff-be91-4ad1-bc95-ea0337098e30\r\nTimestamp: 2026-10-08T15:31:00Z"}`,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := &azcore.ResponseError{
+				RawResponse: &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(strings.NewReader(testCase.body)),
+				},
+			}
+			expected := "failed to generate pull credential: request failed with HTTP status 400: invalid_request"
+			if testCase.diagnostic != "" {
+				expected += ": " + testCase.diagnostic
+			}
+			if status := credentialStatusMessage(err); status != expected {
+				t.Fatalf("expected diagnostic status %q, got %q", expected, status)
+			}
+		})
+	}
+}
+
+func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
+	for _, errorCase := range []struct {
+		name           string
+		codes          string
+		diagnostic     string
+		nextDiagnostic string
+		err            func(string, string) error
+	}{
+		{
+			name:           "ACR response",
+			codes:          "REQUEST_BODY_INVALID",
+			diagnostic:     "Request body is invalid.",
+			nextDiagnostic: "The requested scope is invalid.",
+			err: func(correlationID, diagnostic string) error {
 				return &azcore.ResponseError{
 					StatusCode: http.StatusBadRequest,
 					RawResponse: &http.Response{
 						StatusCode: http.StatusBadRequest,
 						Body: io.NopCloser(strings.NewReader(fmt.Sprintf(
-							`{"errors":[{"code":"REQUEST_BODY_INVALID","message":"Request body is invalid. CorrelationId: %s"}]}`, correlationID))),
+							`{"errors":[{"code":"REQUEST_BODY_INVALID","message":"%s CorrelationId: %s"}]}`, diagnostic, correlationID))),
 					},
 				}
 			},
 		},
 		{
-			name:  "Entra authentication",
-			codes: "700016, invalid_client",
-			err: func(correlationID string) error {
+			name:           "Entra authentication",
+			codes:          "700016, invalid_client",
+			diagnostic:     "AADSTS700016: Application was not found.",
+			nextDiagnostic: "AADSTS700016: Application was not found in the requested tenant.",
+			err: func(correlationID, diagnostic string) error {
 				return &azidentity.AuthenticationFailedError{
 					RawResponse: &http.Response{
 						StatusCode: http.StatusBadRequest,
 						Body: io.NopCloser(strings.NewReader(fmt.Sprintf(
-							`{"error":"invalid_client","error_description":"AADSTS700016: Application was not found.\r\nTrace ID: %[1]s\r\nCorrelation ID: %[1]s","error_codes":[700016],"trace_id":"%[1]s","correlation_id":"%[1]s"}`, correlationID))),
+							`{"error":"invalid_client","error_description":"%[2]s\r\nTrace ID: %[1]s\r\nCorrelation ID: %[1]s","error_codes":[700016],"trace_id":"%[1]s","correlation_id":"%[1]s"}`, correlationID, diagnostic))),
 					},
 				}
 			},
 		},
 		{
-			name:  "managed identity authentication",
-			codes: "invalid_request",
-			err: func(correlationID string) error {
+			name:           "managed identity authentication",
+			codes:          "invalid_request",
+			diagnostic:     "Identity not found.",
+			nextDiagnostic: "Multiple identities are assigned; specify a client ID.",
+			err: func(correlationID, diagnostic string) error {
 				return &azidentity.AuthenticationFailedError{
 					RawResponse: &http.Response{
 						StatusCode: http.StatusBadRequest,
 						Body: io.NopCloser(strings.NewReader(fmt.Sprintf(
-							`{"error":"invalid_request","error_description":"Identity not found. Correlation ID: %s"}`, correlationID))),
+							`{"error":"invalid_request","error_description":"%s Correlation ID: %s"}`, diagnostic, correlationID))),
 					},
 				}
 			},
@@ -438,7 +504,7 @@ func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
 						DoAndReturn(func(context.Context, string, string, string, string) (azcore.AccessToken, error) {
 							calls++
 							return azcore.AccessToken{}, sdkErr
-						}).Times(2)
+						}).Times(3)
 					reconciler = NewV1beta1Reconciler(&V1beta1ReconcilerOpts{
 						CoreOpts: CoreOpts{Client: client, Scheme: s, Logger: logr.Discard()}, Auth: auth,
 					})
@@ -466,14 +532,21 @@ func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
 						operation = "failed to retrieve ACR token"
 					}
 				}
-				expected := operation + ": request failed with HTTP status 400: " + errorCase.codes
-				expectedRetry := "retrying after credential generation failure: " + expected
 				req := ctrl.Request{NamespacedName: crclient.ObjectKeyFromObject(binding)}
 				for attempt, correlationID := range []string{
 					"92b4e2ff-be91-4ad1-bc95-ea0337098e30",
 					"336c85eb-f609-45c2-8a53-89396db5c5a3",
+					"336c85eb-f609-45c2-8a53-89396db5c5a3",
 				} {
-					sdkErr = errorCase.err(correlationID)
+					diagnostic := errorCase.diagnostic
+					expectedUpdates := 1
+					if attempt == 2 {
+						diagnostic = errorCase.nextDiagnostic
+						expectedUpdates = 2
+					}
+					expected := operation + ": request failed with HTTP status 400: " + errorCase.codes + ": " + diagnostic
+					expectedRetry := "retrying after credential generation failure: " + expected
+					sdkErr = errorCase.err(correlationID, diagnostic)
 					result, err := reconciler.Reconcile(ctx, req)
 					if err == nil || err.Error() != expectedRetry {
 						t.Fatalf("attempt %d: expected retry error %q, got %v", attempt+1, expectedRetry, err)
@@ -484,8 +557,8 @@ func TestReconcilersRetryCredentialErrorsWithoutStatusChurn(t *testing.T) {
 					if calls != attempt+1 {
 						t.Fatalf("credential calls = %d, want %d", calls, attempt+1)
 					}
-					if client.statusWriter.updates != 1 {
-						t.Fatalf("attempt %d: status updates = %d, want 1", attempt+1, client.statusWriter.updates)
+					if client.statusWriter.updates != expectedUpdates {
+						t.Fatalf("attempt %d: status updates = %d, want %d", attempt+1, client.statusWriter.updates, expectedUpdates)
 					}
 					stored := binding.DeepCopyObject().(crclient.Object)
 					if err := fakeClient.Get(ctx, req.NamespacedName, stored); err != nil {
@@ -520,7 +593,7 @@ func TestCredentialStatusMessageUsesStructuredServerResponseError(t *testing.T) 
 		},
 	}
 
-	const expected = "failed to retrieve ACR token: request failed with HTTP status 500: INTERNAL_ERROR"
+	const expected = "failed to retrieve ACR token: request failed with HTTP status 500: INTERNAL_ERROR: The registry service is temporarily unavailable"
 	if status := credentialStatusMessage(err); status != expected {
 		t.Fatalf("expected structured status %q, got %q", expected, status)
 	}
