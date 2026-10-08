@@ -1,15 +1,17 @@
 package controller
+
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	azruntime "github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"golang.org/x/exp/slices"
 )
 
 type credentialGenerationError struct {
@@ -40,6 +42,8 @@ func credentialStatusMessage(err error) string {
 		Errors []struct {
 			Code string `json:"code"`
 		} `json:"errors"`
+		Error      string  `json:"error"`
+		ErrorCodes []int64 `json:"error_codes"`
 	}
 	if json.Unmarshal(payload, &responseBody) != nil {
 		return err.Error()
@@ -51,9 +55,19 @@ func credentialStatusMessage(err error) string {
 			codes = append(codes, responseError.Code)
 		}
 	}
+	if responseBody.Error != "" && !slices.Contains(codes, responseBody.Error) {
+		codes = append(codes, responseBody.Error)
+	}
+	for _, code := range responseBody.ErrorCodes {
+		formatted := strconv.FormatInt(code, 10)
+		if !slices.Contains(codes, formatted) {
+			codes = append(codes, formatted)
+		}
+	}
 	if len(codes) == 0 {
 		return err.Error()
 	}
+	slices.Sort(codes)
 
 	operation := "failed to generate pull credential"
 	var generationError credentialGenerationError

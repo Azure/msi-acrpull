@@ -14,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	azworkloadidentity "github.com/Azure/azure-workload-identity/pkg/webhook"
@@ -132,38 +131,8 @@ func TestManagedIdentityPulls(t *testing.T) {
 
 }
 
-type binding interface {
-	*msiacrpullv1beta1.AcrPullBinding | *msiacrpullv1beta2.AcrPullBinding
-	crclient.Object
-}
-
 // bindingMinter is a constructor for a non-nil pointer to a binding, since we can't create that with `B`
 type bindingMinter[B binding] func(namespace, name, scope, serviceAccount string, cfg *Config) B
-
-func updateBindingScope[B binding](
-	ctx context.Context,
-	client crclient.Client,
-	namespace, name, scope string,
-	newBinding func(namespace, name string) B,
-) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		current := newBinding(namespace, name)
-		if err := client.Get(ctx, crclient.ObjectKeyFromObject(current), current); err != nil {
-			return err
-		}
-
-		switch binding := any(current).(type) {
-		case *msiacrpullv1beta1.AcrPullBinding:
-			binding.Spec.Scope = scope
-		case *msiacrpullv1beta2.AcrPullBinding:
-			binding.Spec.ACR.Scope = scope
-		default:
-			return fmt.Errorf("unsupported binding type %T", current)
-		}
-
-		return client.Update(ctx, current)
-	})
-}
 
 func testACRPullBinding[B binding](
 	t *testing.T, prefix string,
