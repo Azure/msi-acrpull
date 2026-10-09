@@ -102,7 +102,7 @@ func NewV1beta1Reconciler(opts *V1beta1ReconcilerOpts) *AcrPullBindingReconciler
 				msiClientID, msiResourceID, acrServer := specOrDefault(opts, binding.Spec)
 				acrAccessToken, err := opts.Auth.AcquireACRAccessToken(ctx, msiResourceID, msiClientID, acrServer, binding.Spec.Scope)
 				if err != nil {
-					return "", time.Time{}, fmt.Errorf("failed to retrieve ACR access token: %w", err)
+					return "", time.Time{}, credentialGenerationError{operation: "failed to retrieve ACR access token", err: err}
 				}
 
 				dockerConfig, err := authorizer.CreateACRDockerCfg(acrServer, acrAccessToken)

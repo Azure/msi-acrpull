@@ -191,7 +191,7 @@ func (r *genericReconciler[O]) reconcile(ctx context.Context, logger logr.Logger
 		dockerConfig, expiresOn, err := r.CreatePullCredential(ctx, acrBinding, serviceAccount)
 		if err != nil {
 			logger.Error(err, "failed to generate pull credential")
-			return r.statusErrorAction(acrBinding, err.Error(), !isPermanentCredentialError(err))
+			return r.statusErrorAction(acrBinding, credentialStatusMessage(err), !isPermanentCredentialError(err))
 		}
 
 		newSecret := newPullSecret(acrBinding, r.GetPullSecretName(acrBinding), dockerConfig, r.Scheme, expiresOn, r.now, inputHash)
