@@ -219,6 +219,11 @@ delimited list.
 
 # Contributing
 
+## Development
+
+Use Go 1.27.2 or later. Run `make lint` to use the pinned golangci-lint version
+managed by [Bingo](./.bingo/README.md), and `make test` to run the tests.
+
 This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
