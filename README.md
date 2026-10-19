@@ -224,6 +224,12 @@ delimited list.
 Use Go 1.27.2 or later. Run `make lint` to use the pinned golangci-lint version
 managed by [Bingo](./.bingo/README.md), and `make test` to run the tests.
 
+The [Dockerfile](./Dockerfile) installs Microsoft Go `1.27.2-2` on Azure Linux 3
+from its immutable release archive, with pinned SHA-256 checksums for amd64 and
+arm64 builders. `GOTOOLCHAIN=local` keeps application builds on that toolchain.
+Both container base images are digest-pinned; the runtime uses Azure Linux 3
+distroless base and runs as a non-root user.
+
 This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
