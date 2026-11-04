@@ -221,7 +221,7 @@ delimited list.
 
 ## Development
 
-Use Go 1.27.2 or later. Run `make lint` to use the pinned golangci-lint version
+Use Go 1.27.3 or later. Run `make lint` to use the pinned golangci-lint version
 managed by [Bingo](./.bingo/README.md), and `make test` to run the tests.
 
 The [Dockerfile](./Dockerfile) installs Go from the Azure Linux 3 package
