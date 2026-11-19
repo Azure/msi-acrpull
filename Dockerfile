@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:88fc2b4a425801b3b4d8fe5342e24fb6134669fb718ec970340bdd36dee50c35 AS builder
+FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:3d16d8799f71a78f5bddb3b7cda4a57df1f40ecfa58bac89933010596aa86880 AS builder
 ENV GOTOOLCHAIN=local \
     MS_GOTOOLCHAIN_TELEMETRY_ENABLED=0
 RUN tdnf install -y ca-certificates git golang \
@@ -26,7 +26,7 @@ COPY ./ ./
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager -tags=requirefips cmd/main.go
 
-FROM mcr.microsoft.com/azurelinux/distroless/base:3.0@sha256:e952865122598043cfb54f0257f016e28e02c21904e172b47dcb2148e095693a
+FROM mcr.microsoft.com/azurelinux/distroless/base:3.0@sha256:11ecd8f7cd1cad0e4fbb565ab98768f1a2ce35cb2730c867217baac011ae8645
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532
